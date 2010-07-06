@@ -206,6 +206,8 @@ lambda-list::=
   (if (symbolp name)
       (progn
         (setf (gethash name *ps-function-toplevel-cache*) lambda-list)
+        (setf (gethash name *ps-function-location-toplevel-cache* nil)
+              (list (make-source-location 'defun name lambda-list body)))
         `(defun-function ,name ,lambda-list ,@body))
       (progn (assert (and (listp name) (= (length name) 2) (eq 'setf (car name))) ()
                      "(defun ~s ~s ...) needs to have a symbol or (setf symbol) for a name." name lambda-list)
@@ -504,3 +506,7 @@ lambda-list::=
 
 (defpsmacro do-set-timeout ((timeout) &body body)
   `(set-timeout (lambda () ,@body) ,timeout))
+
+(defpsmacro in-package (package-designator)
+  (setf *package* (find-package package-designator))
+  nil)

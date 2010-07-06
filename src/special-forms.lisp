@@ -501,7 +501,8 @@ the given lambda-list and body."
         (ps-compile `(progn ,@body))))))
 
 (define-ps-special-form defmacro (name args &body body)
-  (eval `(defpsmacro ,name ,args ,@body))
+  (let ((*ps-source-definer-name* 'defmacro))
+    (eval `(defpsmacro ,name ,args ,@body)))
   nil)
 
 (define-ps-special-form define-symbol-macro (name expansion)

@@ -59,12 +59,18 @@ Body is evaluated."
 
 (defun ps-compile-stream (stream)
   (let ((*ps-compilation-level* :toplevel)
+        (*package* *package*)
 	(eof '#:eof))
     (ps* (cons 'progn
                (loop for form = (funcall *ps-read-function* stream nil eof)
-                     until (eq form eof)
-                     collect form)))))
+                  until (eq form eof)
+                  when (eq (car form) 'in-package)
+                  do (setf *package* (find-package (second form)))
+                  else
+                  collect form)))))
 
 (defun ps-compile-file (source-file)
-  (with-open-file (stream source-file :direction :input)
-    (ps-compile-stream stream)))
+  (let ((*ps-source-file* source-file)
+        (*ps-source-position* 1))
+    (with-open-file (stream source-file :direction :input)
+     (ps-compile-stream stream))))
