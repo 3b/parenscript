@@ -121,8 +121,7 @@ lambda list from a Parenscript perspective."
                        `((:file ,file))
                        `((:buffer ,buffer)))
                  (:position ,position)
-                 (:snippet ,(print (subseq snippet 0 (min 256 (length snippet))))))))
-))
+                 (:snippet ,(subseq snippet 0 (min 256 (length snippet)))))))))
  (cond
      ((and *ps-source-position* (or *ps-source-file* *ps-source-buffer*))
       (msl *ps-source-file* *ps-source-buffer* *ps-source-position*))
