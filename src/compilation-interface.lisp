@@ -79,4 +79,6 @@ if by ps*. If *parenscript-stream* is bound, writes the output to
 (defun ps-compile-file (source-file &key (element-type 'character) (external-format :default))
   "Opens file as input stream and calls ps-compile-stream on it."
   (with-open-file (stream source-file :direction :input :element-type element-type :external-format external-format)
-    (ps-compile-stream stream)))
+    (let ((*ps-source-file* source-file)
+          (*ps-source-position* 1))
+      (ps-compile-stream stream))))

@@ -95,6 +95,15 @@ lexical block.")
 (defvar *function-lambda-list* (make-hash-table)
   "Table of lambda lists for defined functions.")
 
+;;; source locations
+
+(defvar *function-location-toplevel-cache* (make-hash-table)
+  "Table of function to source locations.")
+(defparameter *ps-source-file* nil)
+(defparameter *ps-source-position* nil)
+(defparameter *ps-source-buffer* nil)
+(defparameter *ps-source-definer-name* nil)
+
 ;;; macros
 (defun make-macro-dictionary ()
   (make-hash-table :test 'eq))
@@ -133,6 +142,34 @@ lambda list from a Parenscript perspective."
           ,@body))
      effective-lambda-list)))
 
+(defun make-source-location (definer name lambda-list body &optional sl)
+  (flet ((msl (file buffer position)
+           (let ((snippet (format nil "(~s ~s ~s ~{~s~}" definer name lambda-list body)))
+             `(,(format nil "(~s ~s)" definer name)
+                (:location
+                 ,@(if file
+                       `((:file ,file))
+                       `((:buffer ,buffer)))
+                 (:position ,position)
+                 (:snippet ,(subseq snippet 0 (min 256 (length snippet)))))))))
+    (cond
+      ((and *ps-source-position* (or *ps-source-file* *ps-source-buffer*))
+       (msl *ps-source-file* *ps-source-buffer* *ps-source-position*))
+      #+sbcl
+      ((and sl
+            (let* ((file (or (getf (sb-c:definition-source-location-plist sl)
+                                   :emacs-filename)
+                             (sb-c:definition-source-location-namestring sl)))
+                   (buffer (getf (sb-c:definition-source-location-plist sl)
+                                 :emacs-buffer))
+                   (position (or (getf (sb-c:definition-source-location-plist
+                                           sl)
+                                       :emacs-position)
+                                 1)))
+              (when (or buffer file)
+                (msl file buffer position))))))))
+
+
 (defmacro defpsmacro (name args &body body)
   (defined-operator-override-check name
       (multiple-value-bind (macro-fn-form effective-lambda-list)
@@ -140,6 +177,11 @@ lambda list from a Parenscript perspective."
         `(progn
            (setf (gethash ',name *macro-toplevel*) ,macro-fn-form)
            (setf (gethash ',name *macro-toplevel-lambda-list*) ',effective-lambda-list)
+           (setf (gethash ',name *function-location-toplevel-cache*)
+                 (list (make-source-location ',(or *ps-source-definer-name*
+                                                   'defpsmacro)
+                                             ',name ',args ',body
+                                             #+sbcl (sb-c:source-location))))
            ',name))))
 
 (defmacro define-ps-symbol-macro (symbol expansion)

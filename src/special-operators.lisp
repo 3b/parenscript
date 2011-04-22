@@ -279,7 +279,8 @@
         (ps-compile `(progn ,@body))))))
 
 (define-expression-operator defmacro (name args &body body)
-  (eval `(defpsmacro ,name ,args ,@body))
+  (let ((*ps-source-definer-name* 'defmacro))
+    (eval `(defpsmacro ,name ,args ,@body)))
   nil)
 
 (define-expression-operator define-symbol-macro (name expansion)

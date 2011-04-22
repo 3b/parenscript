@@ -176,6 +176,8 @@ lambda-list::=
   [&aux {var | (var [init-form])}*])"
   (if (symbolp name)
       (progn (setf (gethash name *function-lambda-list*) lambda-list)
+             (setf (gethash name *function-location-toplevel-cache* nil)
+                   (list (make-source-location 'defun name lambda-list body)))
              `(defun% ,name ,lambda-list ,@body))
       (progn (assert (and (listp name) (= (length name) 2) (eq 'setf (car name))) ()
                      "(defun ~s ~s ...) needs to have a symbol or (setf symbol) for a name." name lambda-list)
