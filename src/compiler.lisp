@@ -143,31 +143,62 @@ lambda list from a Parenscript perspective."
      effective-lambda-list)))
 
 (defun make-source-location (definer name lambda-list body &optional sl)
-  (flet ((msl (file buffer position)
-           (let ((snippet (format nil "(~s ~s ~s ~{~s~}" definer name lambda-list body)))
-             `(,(format nil "(~s ~s)" definer name)
-                (:location
-                 ,@(if file
-                       `((:file ,file))
-                       `((:buffer ,buffer)))
-                 (:position ,position)
-                 (:snippet ,(subseq snippet 0 (min 256 (length snippet)))))))))
+  (flet ((msl (file buffer position &optional snippet)
+           (let ((snippet (or snippet
+                              #++(format nil "(~s ~s ~s ~{~s~}" definer name lambda-list body))))
+             `(                  ;,(format nil "(~s ~s)" definer name)
+               ,@(if file
+                     `((:file ,file)
+                       (:modified ,(file-write-date file)))
+                     `((:buffer ,buffer)))
+                 ,(or (assoc :position position)
+                      (assoc :offset position)
+                      (assoc :line position)
+                      (assoc :form-path position))
+                 (:snippet ,(or (and *ps-source-current-form*
+                                     (let ((s (princ-to-string
+                                               *ps-source-current-form*)))
+                                       (subseq s 0 (min 256 (length s)))))
+                                (subseq snippet 0 (min 256 (length snippet)))))))))
+    (format t "~&source form = ~s~%" *ps-source-current-form*)
+
+
     (cond
       ((and *ps-source-position* (or *ps-source-file* *ps-source-buffer*))
-       (msl *ps-source-file* *ps-source-buffer* *ps-source-position*))
+       #++(format t "~&~%psp&psf|psb ~s / ~s~% @ ~s~%" *ps-source-file* *ps-source-buffer*  *ps-source-position*)
+       (msl *ps-source-file* *ps-source-buffer*
+            (if (consp *ps-source-position*)
+                *ps-source-position*
+                `((:position ,*ps-source-position*)))))
       #+sbcl
       ((and sl
-            (let* ((file (or (getf (sb-c:definition-source-location-plist sl)
-                                   :emacs-filename)
-                             (sb-c:definition-source-location-namestring sl)))
-                   (buffer (getf (sb-c:definition-source-location-plist sl)
+            (let* ((buffer (getf (sb-c:definition-source-location-plist sl)
                                  :emacs-buffer))
-                   (position (or (getf (sb-c:definition-source-location-plist
-                                           sl)
-                                       :emacs-position)
-                                 1)))
+                   ;; use in prder of decreasing preference:
+                   ;; :emacs-filename from source-location-plist
+                   ;; :emacs-buffer
+                   ;; source-location-namestring (which gets stuff like
+                   ;; "/tmp/fileRBYgJc" from C-c C-c in *slime-scratch*)
+                   (file (or (getf (sb-c:definition-source-location-plist sl)
+                                   :emacs-filename)
+                             (and (not buffer)
+                                  (sb-c:definition-source-location-namestring
+                                      sl))))
+                   (position `((,@(if (sb-c:definition-source-location-plist
+                                          sl)
+                                      `(,@(if file '(:position) '(:offset 0))
+                                          ,(or (getf (sb-c:definition-source-location-plist
+                                                         sl)
+                                                     :emacs-position)
+                                               (list 1)))
+                                      (list :form-path
+                                            (list (sb-c:definition-source-location-toplevel-form-number
+                                                      sl)))))))
+                   (snippet (getf (sb-c:definition-source-location-plist sl)
+                                  :emacs-string)))
               (when (or buffer file)
-                (msl file buffer position))))))))
+                (msl file buffer position snippet)))))
+      (t #++(format t "~&no source location available?")))))
 
 
 (defmacro defpsmacro (name args &body body)
