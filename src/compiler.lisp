@@ -102,6 +102,7 @@ lexical block.")
 (defparameter *ps-source-file* nil)
 (defparameter *ps-source-position* nil)
 (defparameter *ps-source-buffer* nil)
+(defparameter *ps-source-current-form* nil)
 (defparameter *ps-source-definer-name* nil)
 
 ;;; macros
@@ -147,10 +148,10 @@ lambda list from a Parenscript perspective."
            (let ((snippet (or snippet
                               #++(format nil "(~s ~s ~s ~{~s~}" definer name lambda-list body))))
              `(                  ;,(format nil "(~s ~s)" definer name)
-               ,@(if file
+               ,@(if buffer
+                     `((:buffer ,buffer))
                      `((:file ,file)
-                       (:modified ,(file-write-date file)))
-                     `((:buffer ,buffer)))
+                       (:modified ,(file-write-date file))))
                  ,(or (assoc :position position)
                       (assoc :offset position)
                       (assoc :line position)
@@ -175,18 +176,20 @@ lambda list from a Parenscript perspective."
             (let* ((buffer (getf (sb-c:definition-source-location-plist sl)
                                  :emacs-buffer))
                    ;; use in prder of decreasing preference:
-                   ;; :emacs-filename from source-location-plist
                    ;; :emacs-buffer
+                   ;;   (use buffer first, since C-c C-c is probably
+                   ;;    on stuff that hasn't been saved yet, file may
+                   ;;    not even exist yet)
+                   ;; :emacs-filename from source-location-plist
                    ;; source-location-namestring (which gets stuff like
                    ;; "/tmp/fileRBYgJc" from C-c C-c in *slime-scratch*)
                    (file (or (getf (sb-c:definition-source-location-plist sl)
                                    :emacs-filename)
-                             (and (not buffer)
-                                  (sb-c:definition-source-location-namestring
-                                      sl))))
+                             (sb-c:definition-source-location-namestring
+                                 sl)))
                    (position `((,@(if (sb-c:definition-source-location-plist
                                           sl)
-                                      `(,@(if file '(:position) '(:offset 0))
+                                      `(,@(if buffer '(:offset 0) '(:position))
                                           ,(or (getf (sb-c:definition-source-location-plist
                                                          sl)
                                                      :emacs-position)
