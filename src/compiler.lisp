@@ -38,10 +38,12 @@
 ;; need to split special op definition into two parts - statement and expression
 (defmacro %define-special-operator (type name lambda-list &body body)
   (defined-operator-override-check name
-      `(setf (gethash ',name ,type)
-             (lambda (&rest whole)
-               (destructuring-bind ,lambda-list whole
-                 ,@body)))))
+      `(progn
+         (setf (gethash ',name *special-operator-lambda-list*) ',lambda-list)
+         (setf (gethash ',name ,type)
+              (lambda (&rest whole)
+                (destructuring-bind ,lambda-list whole
+                  ,@body))))))
 
 (defmacro define-expression-operator (name lambda-list &body body)
   `(%define-special-operator *special-expression-operators* ,name ,lambda-list ,@body))
@@ -94,6 +96,9 @@ lexical block.")
 
 (defvar *function-lambda-list* (make-hash-table)
   "Table of lambda lists for defined functions.")
+
+(defvar *special-operator-lambda-list* (make-hash-table)
+  "Table of lambda lists for special operators.")
 
 ;;; source locations
 
