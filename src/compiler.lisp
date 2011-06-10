@@ -166,8 +166,6 @@ lambda list from a Parenscript perspective."
                                                *ps-source-current-form*)))
                                        (subseq s 0 (min 256 (length s)))))
                                 (subseq snippet 0 (min 256 (length snippet)))))))))
-    (format t "~&source form = ~s~%" *ps-source-current-form*)
-
 
     (cond
       ((and *ps-source-position* (or *ps-source-file* *ps-source-buffer*))
