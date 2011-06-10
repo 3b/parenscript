@@ -23,6 +23,7 @@
                          (:file "function-definition")
                          (:file "macros")
                          (:file "deprecated-interface")
+                         (:file "swank-parenscript")
                          (:module :lib
                                   :components ((:file "ps-html")
                                                (:file "ps-loop")
