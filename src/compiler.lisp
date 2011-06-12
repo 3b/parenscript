@@ -155,7 +155,9 @@ lambda list from a Parenscript perspective."
              `(                  ;,(format nil "(~s ~s)" definer name)
                ,@(if buffer
                      `((:buffer ,buffer))
-                     `((:file ,file)
+                     `((:file ,(if (pathnamep file)
+                                   (namestring file)
+                                   file))
                        (:modified ,(file-write-date file))))
                  ,(or (assoc :position position)
                       (assoc :offset position)
