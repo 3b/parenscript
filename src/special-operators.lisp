@@ -8,7 +8,6 @@
   +          ps-js:+
   -          ps-js:-
   *          ps-js:*
-  /          ps-js:/
   rem        ps-js:%
   and        ps-js:&&
   or         ps-js:\|\|
@@ -22,6 +21,9 @@
 
   funcall    ps-js:funcall
   )
+
+(define-expression-operator / (&rest args)
+  `(ps-js:/ ,@(unless (cdr args) (list 1)) ,@(mapcar #'compile-expression args)))
 
 (define-expression-operator - (&rest args)
   (let ((args (mapcar #'compile-expression args)))
@@ -118,7 +120,7 @@
          (ps-js:try ,body
                     :catch (err ,(compile-statement `(progn (if (and err (eql ',tag (getprop err :ps-block-tag)))
                                                                 ;; FIXME make this a multiple-value return
-                                                                (getprop err :ps-return-value)
+                                                                (return (getprop err :ps-return-value))
                                                                 (throw err)))))
                    :finally nil))
       body))
@@ -347,6 +349,7 @@
                                                                  normalized-bindings)))
       (flet ((maybe-rename-lexical-var (x)
                (if (or (member x *enclosing-lexicals*)
+                       (member x *enclosing-function-arguments*)
                        (lookup-macro-def x *symbol-macro-env*)
                        (member x free-variables-in-binding-value-expressions))
                    (ps-gensym (string x))

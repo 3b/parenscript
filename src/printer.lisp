@@ -44,6 +44,7 @@ vice-versa.")
                        (cons (get-output-stream-string *psw-stream*)
                              %psw-accumulator))))))))
 
+(defgeneric ps-print (form))
 (defgeneric ps-print% (js-primitive args))
 
 (defmacro defprinter (js-primitive args &body body)
@@ -129,7 +130,8 @@ vice-versa.")
                        (ps-js:lambda) ;; you won't find this in JS books
                        (ps-js:++ ps-js:-- ps-js:post++ ps-js:post--)
                        (ps-js:! ps-js:~ ps-js:negate ps-js:typeof ps-js:delete)
-                       (ps-js:* ps-js:/ ps-js:%)
+                       (ps-js:/ ps-js:%)
+                       (ps-js:*)
                        (ps-js:-)
                        (ps-js:+)
                        (ps-js:<< ps-js:>> ps-js:>>>)

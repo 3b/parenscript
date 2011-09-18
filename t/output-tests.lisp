@@ -1298,6 +1298,10 @@ try {
                       (:span :class "ticker-symbol-popup")))
   "['<SPAN CLASS=\"ticker-symbol\" TICKER-SYMBOL=\"', symbol, '\"><A HREF=\"http://foo.com\">', symbol, '</A><SPAN CLASS=\"ticker-symbol-popup\"></SPAN></SPAN>']['join']('');")
 
+(test-ps-js who-html2
+  (who-ps-html (:p "t0" (:span "t1")))
+  "'<P>t0<SPAN>t1</SPAN></P>';")
+
 (test-ps-js flet1
   ((lambda () (flet ((foo (x)
                        (1+ x)))
@@ -2841,4 +2845,31 @@ function (x) {
     (lambda (x) (+ x x)))
   "function (x) {
     return x + x;
+};")
+
+(test-ps-js divide-one-arg-reciprocal
+  (/ 2)
+  "1 / 2;")
+
+(test-ps-js division-not-associative
+  (/ a (* b c))
+  "a / (b * c);")
+
+(test-ps-js divide-expressions
+  (/ (foo) (bar))
+  "foo() / bar();")
+
+(test-ps-js divide-expressions1
+  (floor (1- x) y)
+  "Math.floor((x - 1) / y);")
+
+(test-ps-js lexical-funargs-shadow1
+  (lambda (x)
+    (let ((x 1))
+      (foo x))
+    (incf x))
+  "function (x) {
+    var x1 = 1;
+    foo(x1);
+    return ++x;
 };")
