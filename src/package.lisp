@@ -56,6 +56,7 @@
    #:*js-inline-string-delimiter*
    #:*ps-print-pretty*
    #:*indent-num-spaces*
+   #:*max-column-width*
 
    ;; deprecated interface
    #:define-script-symbol-macro
@@ -276,6 +277,10 @@
    #:append
    #:apply
    #:destructuring-bind
+
+   ;; binding
+   #:bind
+   #:bind*
 
    ;; DOM accessing utils
    #:inner-html

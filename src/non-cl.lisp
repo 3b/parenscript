@@ -29,14 +29,17 @@
 (define-statement-operator continue (&optional label)
   `(ps-js:continue ,label))
 
+;; todo: write CL equivalent
 (define-statement-operator switch (test-expr &rest clauses)
   `(ps-js:switch ,(compile-expression test-expr)
      ,@(loop for (val . body) in clauses collect
             (cons (if (eq val 'default)
                       'ps-js:default
-                      (compile-expression val))
+                      (let ((in-case? t))
+                        (compile-expression val)))
                   (mapcan (lambda (x)
-                            (let ((exp (compile-statement x)))
+                            (let* ((in-case? t)
+                                   (exp (compile-statement x)))
                               (if (and (listp exp) (eq 'ps-js:block (car exp)))
                                   (cdr exp)
                                   (list exp))))
@@ -94,32 +97,55 @@
 
 (define-expression-operator var (name &optional (value (values) value?) docstr)
   (declare (ignore docstr))
-  (push name *enclosing-lexical-block-declarations*)
+  (push name *vars-needing-to-be-declared*)
   (when value? (compile-expression `(setf ,name ,value))))
 
 (define-statement-operator var (name &optional (value (values) value?) docstr)
-  `(ps-js:var ,(ps-macroexpand name) ,@(when value? (list (compile-expression value) docstr))))
+  (let ((value (ps-macroexpand value)))
+    (if (and (listp value) (eq 'progn (car value)))
+        (ps-compile `(progn ,@(butlast (cdr value))
+                            (var ,name ,(car (last value)))))
+        `(ps-js:var ,(ps-macroexpand name)
+                    ,@(when value? (list (compile-expression value) docstr))))))
 
 (defmacro var (name &optional value docstr)
   `(defparameter ,name ,value ,@(when docstr (list docstr))))
 
 ;;; iteration
 
+(defvar loop-wrapped? nil
+  "Bind to T when wrapping to avoid infinite recursion.")
+
+(defmacro wrap-loop-for-return (name loop)
+  (let ((loop-body (gensym)))
+   `(let* ((*loop-return-var* nil)
+           (loop-returns? nil)
+           (,loop-body ,loop))
+      (if (and loop-returns? (not loop-wrapped?))
+          (let ((loop-wrapped? t))
+            (compile-statement `(let (,*loop-return-var*)
+                                  (,',name ,@whole)
+                                  ,*loop-return-var*)))
+          ,loop-body))))
+
 (define-statement-operator for (init-forms cond-forms step-forms &body body)
   (let ((init-forms (make-for-vars/inits init-forms)))
-   `(ps-js:for ,init-forms
-            ,(mapcar #'compile-expression cond-forms)
-            ,(mapcar #'compile-expression step-forms)
-            ,(compile-loop-body (mapcar #'car init-forms) body))))
+    (wrap-loop-for-return for
+     `(ps-js:for ,init-forms
+                 ,(mapcar #'compile-expression cond-forms)
+                 ,(mapcar #'compile-expression step-forms)
+                 ,(compile-loop-body (mapcar #'car init-forms) body)))))
 
 (define-statement-operator for-in ((var object) &rest body)
-  `(ps-js:for-in ,(compile-expression var)
-              ,(compile-expression object)
-              ,(compile-loop-body (list var) body)))
+  (wrap-loop-for-return for-in
+   `(ps-js:for-in ,(compile-expression var)
+                  ,(compile-expression object)
+                  ,(compile-loop-body (list var) body))))
 
 (define-statement-operator while (test &rest body)
-  `(ps-js:while ,(compile-expression test)
-     ,(compile-loop-body () body)))
+  (wrap-loop-for-return while
+   `(ps-js:while ,(compile-expression test)
+      ,(compile-loop-body () body))))
 
 (defmacro while (test &body body)
   `(loop while ,test do (progn ,@body)))
@@ -127,13 +153,19 @@
 ;;; misc
 
 (define-statement-operator try (form &rest clauses)
-  (let ((catch (cdr (assoc :catch clauses)))
+  (let ((catch   (cdr (assoc :catch clauses)))
         (finally (cdr (assoc :finally clauses))))
-    (assert (not (cdar catch)) () "Sorry, currently only simple catch forms are supported.")
-    (assert (or catch finally) () "Try form should have either a catch or a finally clause or both.")
-    `(ps-js:try ,(compile-statement `(progn ,form))
-             :catch ,(when catch (list (caar catch) (compile-statement `(progn ,@(cdr catch)))))
-             :finally ,(when finally (compile-statement `(progn ,@finally))))))
+    (assert (not (cdar catch)) ()
+            "Sorry, currently only simple catch forms are supported.")
+    (assert (or catch finally) ()
+            "Try form should have either a catch or a finally clause or both.")
+    `(ps-js:try
+      ,(compile-statement `(progn ,form))
+      :catch ,(when catch
+                    (list (caar catch)
+                          (compile-statement `(progn ,@(cdr catch)))))
+      :finally ,(when finally
+                      (compile-statement `(progn ,@finally))))))
 
 (define-expression-operator regex (regex)
   `(ps-js:regex ,(string regex)))
@@ -150,7 +182,7 @@
 (defun lisp (x) x)
 
 (defpsmacro undefined (x)
-  `(eql undefined ,x))
+  `(eql "undefined" (typeof ,x)))
 
 (defpsmacro defined (x)
   `(not (undefined ,x)))

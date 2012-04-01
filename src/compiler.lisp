@@ -27,6 +27,9 @@
         "public" "short" "static" "super" "synchronized" "throws" "transient"
         "volatile" "{}" "true" "false" "null" "undefined"))
 
+(defvar *lambda-wrappable-statements* ;; break, return, continue not included
+  '(throw switch for for-in while try block))
+
 (defun reserved-symbol? (symbol)
   (find (string-downcase (string symbol)) *reserved-symbol-names* :test #'string=))
 
@@ -46,46 +49,74 @@
                   ,@body))))))
 
 (defmacro define-expression-operator (name lambda-list &body body)
-  `(%define-special-operator *special-expression-operators* ,name ,lambda-list ,@body))
+  `(%define-special-operator *special-expression-operators*
+       ,name ,lambda-list ,@body))
 
 (defmacro define-statement-operator (name lambda-list &body body)
-  `(%define-special-operator *special-statement-operators* ,name ,lambda-list ,@body))
+  `(%define-special-operator *special-statement-operators*
+       ,name ,lambda-list ,@body))
 
 (defun special-form? (form)
   (and (consp form)
        (symbolp (car form))
-       (or (gethash (car form) *special-expression-operators*) (gethash (car form) *special-statement-operators*))))
+       (or (gethash (car form) *special-expression-operators*)
+           (gethash (car form) *special-statement-operators*))))
 
 ;;; scoping and lexical environment
 
-(defvar *enclosing-lexical-block-declarations* ()
+(defvar *vars-needing-to-be-declared* ()
   "This special variable is expected to be bound to a fresh list by
 special forms that introduce a new JavaScript lexical block (currently
 function definitions and lambdas). Enclosed special forms are expected
 to push variable declarations onto the list when the variables
-declaration cannot be made by the enclosed form for example, a
-x,y,z expression progn. It is then the responsibility of the
-enclosing special form to introduce the variable bindings in its
-lexical block.")
+declaration cannot be made by the enclosed form (for example, a x,y,z
+expression progn). It is then the responsibility of the enclosing
+special form to introduce the variable declarations in its lexical
+block.")
+
+(defvar *used-up-names*)
+(setf (documentation '*used-up-names* 'variable)
+      "Names that have been already used for lexical bindings in the current function scope.")
+
+(defvar in-case? nil
+  "Bind to T when compiling CASE branches.")
 
 (defvar in-loop-scope? nil
   "Used for seeing when we're in loops, so that we can introduce
   proper scoping for lambdas closing over loop-bound
   variables (otherwise they all share the same binding).")
+(defvar *loop-return-var* nil
+  "Variable which is used to return values from inside loop bodies.")
+(defvar loop-returns? nil
+  "Set to T by RETURN-FROM when it returns a value from inside a loop.")
 
 (defvar *loop-scope-lexicals*)
+(setf (documentation '*loop-scope-lexicals* 'variable)
+      "Lexical variables introduced by a loop.")
 (defvar *loop-scope-lexicals-captured*)
+(setf (documentation '*loop-scope-lexicals-captured* 'variable)
+      "Lexical variables introduced by a loop that are also captured by lambdas inside a loop.")
 
-(defvar *local-function-names* ())
+(defvar in-function-scope? nil
+  "Lets the compiler know when lambda wrapping is necessary.")
+
+(defvar *local-function-names* ()
+  "Functions named by flet and label.")
 ;; is a subset of
-(defvar *enclosing-lexicals* ())
-(defvar *enclosing-function-arguments* ())
-(defvar *function-block-names* ())
-(defvar *lexical-extent-return-tags* ())
-(defvar *dynamic-extent-return-tags* ())
-(defvar *tags-that-return-throws-to*)
+(defvar *enclosing-lexicals* ()
+  "All enclosing lexical variables (includes function names).")
+(defvar *enclosing-function-arguments* ()
+  "Lexical variables bound in all lexically enclosing function argument lists.")
 
-(defvar *special-variables* ())
+(defvar *function-block-names* ()
+  "All block names that this function is responsible for catching.")
+(defvar *dynamic-return-tags* ()
+  "Tags that need to be thrown to to reach.")
+(defvar *current-block-tag* nil
+  "Name of the lexically enclosing block, if any.")
+
+(defvar *special-variables* ()
+  "Special variables declared during any Parenscript run. Re-bind this if you want to clear the list.")
 
 (defun special-variable? (sym)
   (member sym *special-variables*))
@@ -247,8 +278,10 @@ CL environment)."
           (defpsmacro ,name ,args ,@body)))
 
 (defun ps-macroexpand-1 (form)
-  (aif (or (and (symbolp form) (or (and (member form *enclosing-lexicals*) (lookup-macro-def form *symbol-macro-env*))
-                                   (gethash form *symbol-macro-toplevel*))) ;; hack
+  (aif (or (and (symbolp form)
+                (or (and (member form *enclosing-lexicals*)
+                         (lookup-macro-def form *symbol-macro-env*))
+                    (gethash form *symbol-macro-toplevel*))) ;; hack
            (and (consp form) (lookup-macro-def (car form) *macro-env*)))
        (values (ps-macroexpand (funcall it form)) t)
        form))
@@ -270,11 +303,11 @@ nil indicates we are no longer toplevel-related.")
 (defun adjust-compilation-level (form level)
   "Given the current *compilation-level*, LEVEL, and the fully macroexpanded
 form, FORM, returns the new value for *compilation-level*."
-  (cond ((or (and (consp form) (member (car form) '(progn locally macrolet symbol-macrolet)))
+  (cond ((or (and (consp form)
+                  (member (car form) '(progn locally macrolet symbol-macrolet)))
              (and (symbolp form) (eq :toplevel level)))
          level)
-        ((eq :toplevel level)
-         :inside-toplevel-form)))
+        ((eq :toplevel level) :inside-toplevel-form)))
 
 (defvar compile-expression?)
 
@@ -284,30 +317,36 @@ form, FORM, returns the new value for *compilation-level*."
              (format stream "The Parenscript form ~A cannot be compiled into an expression." (error-form condition)))))
 
 (defun compile-special-form (form)
-  (apply (if compile-expression?
-             (or (gethash (car form) *special-expression-operators*)
-                 (error 'compile-expression-error :form form))
-             (or (gethash (car form) *special-statement-operators*)
-                 (gethash (car form) *special-expression-operators*)))
-         (cdr form)))
+  (let* ((op (car form))
+         (statement-impl (gethash op *special-statement-operators*))
+         (expression-impl (gethash op *special-expression-operators*)))
+    (cond ((not compile-expression?)
+           (apply (or statement-impl expression-impl) (cdr form)))
+          (expression-impl
+           (apply expression-impl (cdr form)))
+          ((member op *lambda-wrappable-statements*)
+           (compile-expression `((lambda () ,form))))
+          (t (error 'compile-expression-error :form form)))))
 
 (defun ps-compile (form)
   (typecase form
     ((or null number string character) form)
+    (vector (ps-compile `(quote ,(coerce form 'list))))
     ((or symbol list)
      (multiple-value-bind (expansion expanded?) (ps-macroexpand form)
        (if expanded?
            (ps-compile expansion)
            (if (symbolp form)
                form
-               (let ((*compilation-level* (adjust-compilation-level form *compilation-level*)))
+               (let ((*compilation-level*
+                      (adjust-compilation-level form *compilation-level*)))
                  (if (special-form? form)
                      (compile-special-form form)
-                     `(ps-js:funcall ,(if (symbolp (car form))
-                                       (maybe-rename-local-function (car form))
-                                       (compile-expression (car form)))
-                                  ,@(mapcar #'compile-expression (cdr form)))))))))
-    (vector (ps-compile `(quote ,(coerce form 'list))))))
+                     `(ps-js:funcall
+                       ,(if (symbolp (car form))
+                            (maybe-rename-local-function (car form))
+                            (compile-expression (car form)))
+                       ,@(mapcar #'compile-expression (cdr form)))))))))))
 
 (defun compile-statement (form)
   (let ((compile-expression? nil))

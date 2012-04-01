@@ -96,15 +96,15 @@
 
 (test-ps-js object-literals-1
   (create foo "bar" :blorg 1)
-  "{ foo : 'bar', 'blorg' : 1 };")
+  "({ foo : 'bar', 'blorg' : 1 });")
 
 (test-ps-js object-literals-2
   (create foo "hihi"
           blorg (array 1 2 3)
           another-object (create :schtrunz 1))
-  "{ foo : 'hihi',
+  "({ foo : 'hihi',
   blorg : [ 1, 2, 3 ],
-  anotherObject : { 'schtrunz' : 1 } };")
+  anotherObject : { 'schtrunz' : 1 } });")
 
 (test-ps-js object-literals-3
   (getprop an-object 'foo)
@@ -141,9 +141,9 @@
 
 (test-ps-js literal-symbols-4
   (lambda () nil)
-  "function () {
+  "(function () {
     return null;
-};")
+});")
 
 (test-ps-js literal-symbols-5
   undefined
@@ -195,7 +195,7 @@
 
 (test-ps-js operator-expressions-3
   (* 1 (+ 2 3 4) 4 (/ 6 7))
-  "1 * (2 + 3 + 4) * 4 * 6 / 7;")
+  "1 * (2 + 3 + 4) * 4 * (6 / 7);")
 
 (test-ps-js operator-expressions-4
   (incf i)
@@ -233,11 +233,11 @@ blafoo(i);")
     return a + b;
 };")
 
-(test-ps-js function-definition-2
+(test-ps-js lambda-definition-2
   (lambda (a b) (+ a b))
-  "function (a, b) {
+  "(function (a, b) {
     return a + b;
-};")
+});")
 
 (test-ps-js assignment-1
   (setf a 1)
@@ -260,13 +260,15 @@ x = a + b + c;")
 
 (test-ps-js assignment-5
   (let ((a 1) (b 2))
-  (psetf a b b a))
-  "var a = 1;
+    (psetf a b b a))
+  "(function () {
+var a = 1;
 var b = 2;
-var _js1 = b;
-var _js2 = a;
-a = _js1;
-b = _js2;")
+var _js3 = b;
+var _js4 = a;
+a = _js3;
+return b = _js4;
+})();")
 
 (test-ps-js assignment-6
   (setq a 1)
@@ -287,9 +289,11 @@ __setf_color(23 + 'em', someDiv);")
     (defsetf left (el) (offset)
       `(setf (getprop (getprop ,el 'style) 'left) ,offset))
     (setf (left some-div) (+ 123 "px")))
-  "var _js2 = someDiv;
+  "(function () {
+var _js2 = someDiv;
 var _js1 = 123 + 'px';
-_js2.style.left = _js1;")
+return _js2.style.left = _js1;
+})();")
 
 (test-ps-js assignment-12
   (macrolet ((left (el)
@@ -298,10 +302,11 @@ _js2.style.left = _js1;")
   "someDiv.offsetLeft;")
 
 (test-ps-js nil-block-return-1
-  (block nil (return))
-  "nilBlock: {
-    break nilBlock;
-};")
+  (block nil (return) 1)
+  "(function () {
+    return null;
+    return 1;
+})();")
 
 (test-ps-js single-argument-statements-2
   (throw "foobar")
@@ -370,6 +375,7 @@ _js2.style.left = _js1;")
                   (x (+ x y)))
              (+ *a* x y))))
   "var A = 4;
+(function () {
 var x = 1;
 var A_TMPSTACK1;
 try {
@@ -377,19 +383,21 @@ try {
     A = 2;
     var y = x + 1;
     var x2 = x + y;
-    A + x2 + y;
+    return A + x2 + y;
 } finally {
     A = A_TMPSTACK1;
-};")
+};
+})();")
 
 (test-ps-js iteration-constructs-1
   (do* ((a) b (c (array "a" "b" "c" "d" "e"))
-      (d 0 (1+ d))
-      (e (aref c d) (aref c d)))
-     ((or (= d (@ c length)) (string= e "x")))
-  (setf a d b e)
-  (funcall (@ document write) (+ "a: " a " b: " b "<br/>")))
-  "for (var a = null, b = null, c = ['a', 'b', 'c', 'd', 'e'], d = 0, e = c[d]; !(d === c.length || e === 'x'); d += 1, e = c[d]) {
+        (d 0 (1+ d))
+        (e (aref c d) (aref c d)))
+       ((or (= d (@ c length)) (string= e "x")))
+    (setf a d b e)
+    (funcall (@ document write) (+ "a: " a " b: " b "<br/>")))
+  "for (var a = null, b = null, c = ['a', 'b', 'c', 'd', 'e'], d = 0, e = c[d];
+       !(d === c.length || e === 'x'); d += 1, e = c[d]) {
     a = d;
     b = e;
     document.write('a: ' + a + ' b: ' + b + '<br/>');
@@ -397,59 +405,67 @@ try {
 
 (test-ps-js iteration-constructs-2
   (do ((i 0 (1+ i))
-     (s 0 (+ s i (1+ i))))
-    ((> i 10))
-  (funcall (@ document write) (+ "i: " i " s: " s "<br/>")))
-  "var i = 0;
+       (s 0 (+ s i (1+ i))))
+      ((> i 10))
+    (funcall (@ document write) (+ "i: " i " s: " s "<br/>")))
+  "(function () {
+var i = 0;
 var s = 0;
 for (; i <= 10; ) {
     document.write('i: ' + i + ' s: ' + s + '<br/>');
     var _js1 = i + 1;
-    var _js2 = s + i + i + 1;
+    var _js2 = s + i + (i + 1);
     i = _js1;
     s = _js2;
-};")
+};
+})();")
 
 (test-ps-js iteration-constructs-3
   (do* ((i 0 (1+ i))
-      (s 0 (+ s i (1- i))))
-     ((> i 10))
-  ((@ document write) (+ "i: " i " s: " s "<br/>")))
-  "for (var i = 0, s = 0; i <= 10; i += 1, s = s + i + i - 1) {
+        (s 0 (+ s i (1- i))))
+       ((> i 10))
+    ((@ document write) (+ "i: " i " s: " s "<br/>")))
+  "for (var i = 0, s = 0; i <= 10; i += 1, s = s + i + (i - 1)) {
     document.write('i: ' + i + ' s: ' + s + '<br/>');
 };")
 
 (test-ps-js iteration-constructs-4
   (let ((arr (array "a" "b" "c" "d" "e")))
-  (dotimes (i (@ arr length))
-    ((@ document write) (+ "i: " i " arr[i]: " (aref arr i) "<br/>"))))
-  "var arr = ['a', 'b', 'c', 'd', 'e'];
+    (dotimes (i (@ arr length))
+      ((@ document write) (+ "i: " i " arr[i]: " (aref arr i) "<br/>"))))
+  "(function () {
+var arr = ['a', 'b', 'c', 'd', 'e'];
 for (var i = 0; i < arr.length; i += 1) {
     document.write('i: ' + i + ' arr[i]: ' + arr[i] + '<br/>');
-};")
+};
+})();")
 
 (test-ps-js iteration-constructs-5
   (let ((res 0))
-  (alert (+ "Summation to 10 is "
-            (dotimes (i 10 res)
-              (incf res (1+ i))))))
-  "var res = 0;
-alert('Summation to 10 is ' + (function () {
+    (alert (+ "Summation to 10 is "
+              (dotimes (i 10 res)
+                (incf res (1+ i))))))
+  "(function () {
+var res = 0;
+return alert('Summation to 10 is ' + (function () {
     for (var i = 0; i < 10; i += 1) {
         res += i + 1;
     };
     return res;
-})());")
+})());
+})();")
 
 (test-ps-js iteration-constructs-6
   (let ((l (list 1 2 4 8 16 32)))
-  (dolist (c l)
-    ((@ document write) (+ "c: " c "<br/>"))))
-  "var l = [1, 2, 4, 8, 16, 32];
-for (var c = null, _js_idx1 = 0; _js_idx1 < l.length; _js_idx1 += 1) {
-    c = l[_js_idx1];
+    (dolist (c l)
+      ((@ document write) (+ "c: " c "<br/>"))))
+  "(function () {
+var l = [1, 2, 4, 8, 16, 32];
+for (var c = null, _js_idx2 = 0; _js_idx2 < l.length; _js_idx2 += 1) {
+    c = l[_js_idx2];
     document.write('c: ' + c + '<br/>');
-};")
+};
+})();")
 
 (test-ps-js iteration-constructs-7
   (let ((l '(1 2 4 8 16 32))
@@ -457,24 +473,28 @@ for (var c = null, _js_idx1 = 0; _js_idx1 < l.length; _js_idx1 += 1) {
     (alert (+ "Sum of " l " is: "
               (dolist (c l s)
                 (incf s c)))))
-  "var l = [1, 2, 4, 8, 16, 32];
+  "(function () {
+var l = [1, 2, 4, 8, 16, 32];
 var s = 0;
-alert('Sum of ' + l + ' is: ' + (function () {
+return alert('Sum of ' + l + ' is: ' + (function () {
     for (var c = null, _js_idx1 = 0; _js_idx1 < l.length; _js_idx1 += 1) {
         c = l[_js_idx1];
         s += c;
     };
     return s;
-})());")
+})());
+})();")
 
 (test-ps-js iteration-constructs-8
   (let ((obj (create a 1 b 2 c 3)))
-  (for-in (i obj)
-    ((@ document write) (+ i ": " (aref obj i) "<br/>"))))
-  "var obj = { a : 1, b : 2, c : 3 };
+    (for-in (i obj)
+            ((@ document write) (+ i ": " (aref obj i) "<br/>"))))
+  "(function () {
+var obj = { a : 1, b : 2, c : 3 };
 for (var i in obj) {
     document.write(i + ': ' + obj[i] + '<br/>');
-};")
+};
+})();")
 
 (test-ps-js iteration-constructs-9
   (while ((@ film is-not-finished))
@@ -545,9 +565,11 @@ for (var i in obj) {
     (setf (getprop element 'inner-h-t-m-l)
           (ps-html ((:textarea (or disabled (not authorized)) :disabled "disabled")
                     "Edit me"))))
-  "var disabled = null;
+  "(function () {
+var disabled = null;
 var authorized = true;
-element.innerHTML = ['<TEXTAREA', disabled || !authorized ? [' DISABLED=\"', 'disabled', '\"']['join']('') : '', '>Edit me</TEXTAREA>']['join']('');")
+return element.innerHTML = ['<TEXTAREA', disabled || !authorized ? [' DISABLED=\"', 'disabled', '\"']['join']('') : '', '>Edit me</TEXTAREA>']['join']('');
+})();")
 
 (test-ps-js plus-is-not-commutative
   (setf x (+ "before" x "after"))
@@ -556,20 +578,6 @@ element.innerHTML = ['<TEXTAREA', disabled || !authorized ? [' DISABLED=\"', 'di
 (test-ps-js plus-works-if-first
   (setf x (+ x "middle" "after"))
   "x = x + 'middle' + 'after';")
-
-(test-ps-js setf-side-effects
-  (progn
-    (let ((x 10))
-      (defun side-effect()
-        (setf x 4)
-        3)
-      (setf x (+ 2 (side-effect) x 5))))
-  "var x = 10;
-function sideEffect() {
-  x = 4;
-  return 3;
-};
-x = 2 + sideEffect() + x + 5;")
 
 (test-ps-js method-call-op-form
   (funcall (getprop (+ "" x) 'to-string))
@@ -609,8 +617,10 @@ x = 2 + sideEffect() + x + 5;")
 (test-ps-js simple-getprop
   (let ((foo (create a 1)))
     (alert (getprop foo 'a)))
-  "var foo = { a : 1 };
-   alert(foo.a);")
+  "(function () {
+   var foo = { a : 1 };
+   return alert(foo.a);
+})();")
 
 (test-ps-js buggy-getprop
   (getprop foo slot-name)
@@ -693,13 +703,13 @@ x = 2 + sideEffect() + x + 5;")
                    ("u0080" . ,(code-char 128)) ;;Character over 127. Actually valid, parenscript escapes them to be sure.
                    ("uABCD" . ,(code-char #xabcd)))));; Really above ascii.
     (loop for (js-escape . lisp-char) in escapes
-          for generated = (ps-doc* `(let ((x ,(format nil "hello~ahi" lisp-char)))))
-          for wanted = (format nil "var x = 'hello\\~ahi';" js-escape)
+          for generated = (ps-doc* (format nil "hello~ahi" lisp-char))
+          for wanted = (format nil "'hello\\~ahi';" js-escape)
           do (is (string= (normalize-js-code generated) wanted)))))
 
 (test-ps-js getprop-setf
   (setf (getprop x 'y) (+ (+ a 3) 4))
-  "x.y = a + 3 + 4;")
+  "x.y = (a + 3) + 4;")
 
 (test-ps-js getprop-conditional1
   (getprop (if zoo foo bar) 'x)
@@ -726,10 +736,12 @@ x = 2 + sideEffect() + x + 5;")
 (test-ps-js defsetf1
   (progn (defsetf baz (x y) (newval) `(set-baz ,x ,y ,newval))
          (setf (baz 1 2) 3))
-  "var _js2 = 1;
+  "(function () {
+var _js2 = 1;
 var _js3 = 2;
 var _js1 = 3;
-setBaz(_js2, _js3, _js1);")
+return setBaz(_js2, _js3, _js1);
+})();")
 
 (test-ps-js setf-macroexpands1
   (macrolet ((bar (x y)
@@ -775,21 +787,32 @@ __setf_someThing('foo', 1, 2);")
     return x;
 };")
 
-(test-ps-js defun-optional4
+(test-ps-js arglist-optional4
   (lambda (&optional (x 0 supplied?))
     x)
-  "function (x) {
+  "(function (x) {
     var suppliedwhat = x !== undefined;
     if (!suppliedwhat) {
         x = 0;
     };
     return x;
-};")
+});")
 
 (test-ps-js return-nothing
   (defun foo ()  (return-from foo))
   "function foo() {
     return null;
+};")
+
+(test-ps-js return-values
+  (defun foo ()  (return-from foo (values 1 2 3)))
+  "function foo() {
+    var val1_1 = 1;
+    var valrest2 = [2, 3];
+    if ('undefined' !== typeof arguments['callee']['caller']['mv']) {
+        arguments['callee']['caller']['mv'] = valrest2;
+    };
+    return val1_1;
 };")
 
 (test-ps-js set-timeout
@@ -826,11 +849,11 @@ __setf_someThing('foo', 1, 2);")
 
 (test-ps-js obj-literal-numbers
   (create 1 "foo")
-  "{ 1 : 'foo' };")
+  "({ 1 : 'foo' });")
 
 (test-ps-js obj-literal-strings
   (create "foo" 2)
-  "{ 'foo' : 2 };")
+  "({ 'foo' : 2 });")
 
 (test-ps-js getprop-string
   (getprop foo "bar")
@@ -850,11 +873,11 @@ __setf_someThing('foo', 1, 2);")
 
 (test-ps-js create-blank
   (create)
-  "{ };")
+  "({ });")
 
 (test-ps-js blank-object-literal
   {}
-  "{ };")
+  "({ });")
 
 (test-ps-js array-literal1
   []
@@ -939,7 +962,7 @@ __setf_someThing('foo', 1, 2);")
         };
     };
     var baz;
-    var bar = undefined === bar ? 4 : bar;
+    var bar = 'undefined' === typeof bar ? 4 : bar;
     return baz * bar;
 };")
 
@@ -954,14 +977,14 @@ __setf_someThing('foo', 1, 2);")
             myName = arguments[n1 + 1];
         };
     };
-    var myName = undefined === myName ? 1 : myName;
+    var myName = 'undefined' === typeof myName ? 1 : myName;
     return myName;
 };")
 
-(test-ps-js defun-keyword-supplied
+(test-ps-js arglist-keyword-supplied
   (lambda (&key (foo 1 supplied?))
     foo)
-"function () {
+"(function () {
     var _js2 = arguments.length;
     for (var n1 = 0; n1 < _js2; n1 += 2) {
         switch (arguments[n1]) {
@@ -971,9 +994,9 @@ __setf_someThing('foo', 1, 2);")
         };
     };
     var suppliedwhat;
-    var foo = undefined === foo ? 1 : foo;
+    var foo = 'undefined' === typeof foo ? 1 : foo;
     return foo;
-};")
+});")
 
 (test-ps-js keyword-funcall1
   (func :baz 1)
@@ -1044,9 +1067,9 @@ __setf_someThing('foo', 1, 2);")
           ((< 1 2 3 4 5) x)
           (t "foo")))
   "function foo() {
-    var _cmp3;
-    var _cmp2;
     var _cmp1;
+    var _cmp2;
+    var _cmp3;
     if (1 < 2) {
         bar('foo');
         return 4 * 5;
@@ -1156,14 +1179,16 @@ __setf_someThing('foo', 1, 2);")
          (let* ((*foo* 2))
            (* *foo* 2)))
   "var FOO;
-var FOO_TMPSTACK1;
-try {
-    FOO_TMPSTACK1 = FOO;
-    FOO = 2;
-    FOO * 2;
-} finally {
-    FOO = FOO_TMPSTACK1;
-};")
+(function () {
+    var FOO_TMPSTACK1;
+    try {
+        FOO_TMPSTACK1 = FOO;
+        FOO = 2;
+        return FOO * 2;
+    } finally {
+        FOO = FOO_TMPSTACK1;
+    };
+})();")
 
 (test-ps-js special-var2
   (progn (defvar *foo*)
@@ -1171,15 +1196,17 @@ try {
                 (*foo* 2))
            (* *foo* 2 *baz*)))
   "var FOO;
-var BAZ = 3;
-var FOO_TMPSTACK1;
-try {
-    FOO_TMPSTACK1 = FOO;
-    FOO = 2;
-    FOO * 2 * BAZ;
-} finally {
-    FOO = FOO_TMPSTACK1;
-};")
+(function () {
+    var BAZ = 3;
+    var FOO_TMPSTACK1;
+    try {
+        FOO_TMPSTACK1 = FOO;
+        FOO = 2;
+        return FOO * 2 * BAZ;
+    } finally {
+        FOO = FOO_TMPSTACK1;
+    };
+})();")
 
 (test-ps-js literal1
   (setf x undefined)
@@ -1317,20 +1344,23 @@ try {
   (flet ((foo (x) (1+ x))
          (bar (y) (+ 2 y)))
     (bar (foo 1)))
-"var foo = function (x) {
+"(function () {
+var foo = function (x) {
     return x + 1;
 };
 var bar = function (y) {
     return 2 + y;
 };
-bar(foo(1));")
+return bar(foo(1));
+})();")
 
 (test-ps-js flet3
   (flet ((foo (x) (+ 2 x)))
     (flet ((foo (x) (1+ x))
            (bar (y) (+ 2 (foo y))))
       (bar (foo 1))))
-  "var foo = function (x) {
+  "(function () {
+var foo = function (x) {
     return 2 + x;
 };
 var foo1 = function (x) {
@@ -1339,7 +1369,8 @@ var foo1 = function (x) {
 var bar = function (y) {
     return 2 + foo(y);
 };
-bar(foo1(1));")
+return bar(foo1(1));
+})();")
 
 (test-ps-js labels1
   ((lambda () (labels ((foo (x)
@@ -1358,37 +1389,43 @@ bar(foo1(1));")
   (labels ((foo (x) (1+ (bar x)))
            (bar (y) (+ 2 (foo y))))
     (bar (foo 1)))
-  "var foo = function (x) {
+  "(function () {
+var foo = function (x) {
     return bar(x) + 1;
 };
 var bar = function (y) {
     return 2 + foo(y);
 };
-bar(foo(1));")
+return bar(foo(1));
+})();")
 
 (test-ps-js labels3
   (labels ((foo (x) (1+ x))
            (bar (y) (+ 2 (foo y))))
     (bar (foo 1)))
-  "var foo = function (x) {
+  "(function () {
+var foo = function (x) {
     return x + 1;
 };
 var bar = function (y) {
     return 2 + foo(y);
 };
-bar(foo(1));")
+return bar(foo(1));
+})();")
 
 (test-ps-js labels-lambda-list
   (labels ((foo (x &optional (y 0))
              (+ x y)))
     (foo 1))
-  "var foo = function (x, y) {
+  "(function () {
+var foo = function (x, y) {
     if (y === undefined) {
         y = 0;
     };
     return x + y;
 };
-foo(1);")
+return foo(1);
+})();")
 
 (test-ps-js for-loop-var-init-exp
   ((lambda (x)
@@ -1417,22 +1454,43 @@ foo(1);")
   "[1, 'foo', 3];")
 
 (test ps-lisp-expands-in-lexical-environment
-  (is (string= "5;" (let ((x 5)) (ps (lisp x))))))
+  (is (string= "5;" (let ((x 5))
+                      (ps (lisp x))))))
+
+(test ps-lisp-expands-in-lexical-environment1
+  (is (string= "1 + 5;" (let ((x 5))
+                          (ps (+ 1 (lisp x)))))))
+
+(test ps-lisp-expands-in-lexical-environment2
+  (is (string= "1 + 2 + 3;" (let ((x 2))
+                          (ps (+ 1 (lisp x) 3))))))
 
 (test ps*-lisp-expands-in-null-lexical-environment
-  (signals error (let ((x 5)) (declare (ignore x)) (ps* '(lisp x)))))
+  (signals unbound-variable (let ((x 5))
+                              (declare (ignore x))
+                              (ps* '(lisp x)))))
 
 (test ps*-lisp-expands-in-dynamic-environment
-  (is (string= "1 + 2;" (let ((foo 2)) (declare (special foo)) (ps* '(+ 1 (lisp (locally (declare (special foo)) foo))))))))
+  (is (string= "1 + 2;"
+               (let ((foo 2))
+                 (declare (special foo))
+                 (ps* '(+ 1 (lisp (locally (declare (special foo)) foo))))))))
 
 (test ps-lisp-dynamic-environment
-  (is (string= "1 + 2;" (let ((foo 2)) (declare (special foo)) (ps (+ 1 (lisp foo)))))))
+  (is (string= "1 + 2;"
+               (let ((foo 2))
+                 (declare (special foo))
+                 (ps (+ 1 (lisp foo)))))))
 
 (test-ps-js nested-if-expressions1
   (defun foo ()
     (return-from foo (if (if x y z) a b)))
   "function foo() {
-    return (x ? y : z) ? a : b;
+    if (x ? y : z) {
+        return a;
+    } else {
+        return b;
+    };
 };")
 
 (test-ps-js nested-if-expressions2
@@ -1449,36 +1507,46 @@ foo(1);")
 (test-ps-js let1
   (let (x)
     (+ x x))
-  "var x = null;
-x + x;")
+  "(function () {
+    var x = null;
+    return x + x;
+})();")
 
 (test-ps-js let2
   (let ((x 1))
     (+ x x))
-  "var x = 1;
-x + x;")
+  "(function () {
+    var x = 1;
+    return x + x;
+})();")
 
 (test-ps-js let-x-x
   (let ((x (1+ x)))
     (+ x x))
-  "var x1 = x + 1;
-x1 + x1;")
+  "(function () {
+    var x1 = x + 1;
+    return x1 + x1;
+})();")
 
 (test-ps-js let3
   (let ((x 1)
         (y 2))
     (+ x x))
-  "var x = 1;
+  "(function () {
+var x = 1;
 var y = 2;
-x + x;")
+return x + x;
+})();")
 
 (test-ps-js let4
   (let ((x 1)
         (y (1+ x)))
     (+ x y))
-  "var x1 = 1;
+  "(function () {
+var x1 = 1;
 var y = x + 1;
-x1 + y;")
+return x1 + y;
+})();")
 
 (test-ps-js let5
   (let ((x 1))
@@ -1486,64 +1554,76 @@ x1 + y;")
     (let ((x (+ x 5)))
       (+ x 1))
     (+ x 1))
-  "var x = 1;
+  "(function () {
+var x = 1;
 x + 1;
 var x1 = x + 5;
 x1 + 1;
-x + 1;")
+return x + 1;
+})();")
 
 (test-ps-js let6
   (let ((x 2))
     (let ((x 1)
           (y (1+ x)))
       (+ x y)))
-  "var x = 2;
+  "(function () {
+var x = 2;
 var x1 = 1;
 var y = x + 1;
-x1 + y;")
+return x1 + y;
+})();")
 
 (test-ps-js let-exp1
   (lambda ()
     (let (x)
       (+ x x)))
-  "function () {
+  "(function () {
     var x = null;
     return x + x;
-};")
+});")
 
 (test-ps-js let*1
   (let* ((x 1))
     (+ x x))
-"var x = 1;
-x + x;")
+"(function () {
+var x = 1;
+return x + x;
+})();")
 
 (test-ps-js let*2
   (let* ((x 1)
          (y (+ x 2)))
     (+ x y))
-  "var x = 1;
-var y = x + 2;
-x + y;")
+  "(function () {
+    var x = 1;
+    var y = x + 2;
+    return x + y;
+})();")
 
 (test-ps-js let*3
   (let ((x 3))
-        (let* ((x 1)
-               (y (+ x 2)))
-          (+ x y)))
-  "var x = 3;
-var x1 = 1;
-var y = x1 + 2;
-x1 + y;")
+    (let* ((x 1)
+           (y (+ x 2)))
+      (+ x y)))
+  "(function () {
+    var x = 3;
+    var x1 = 1;
+    var y = x1 + 2;
+    return x1 + y;
+})();")
 
 (test-ps-js let*4
   (let ((x 3))
-        (let* ((y (+ x 2))
-               (x 1))
-          (+ x y)))
-  "var x = 3;
-var y = x + 2;
-var x1 = 1;
-x1 + y;")
+    (let* ((y (+ x 2))
+           (x 1))
+      (+ x y)))
+  "(function () {
+    var x = 3;
+    var y = x + 2;
+    var x1 = 1;
+    return x1 + y;
+})();")
 
 (test-ps-js symbol-macrolet-var
   (symbol-macrolet ((x y))
@@ -1556,13 +1636,19 @@ x1 + y;")
 
 (test-ps-js setf-let1
   (setf x (let ((a 1)) a))
-  "x = (a = 1, a);")
+  "x = (function () {
+    var a = 1;
+    return a;
+})();")
 
 (test-ps-js setf-let2
   (setf x (let ((a (foo)))
             (unless (null a)
               (1+ a))))
-  "x = (a = foo(), a != null ? a + 1 : null);")
+  "x = (function () {
+    var a = foo();
+    return a != null ? a + 1 : null;
+})();")
 
 (test-ps-js symbol-macro-env1
   (symbol-macrolet ((bar 1))
@@ -1578,32 +1664,38 @@ x1 + y;")
 (test-ps-js lisp2-namespaces1
   (let ((list nil))
     (setf list (list 1 2 3)))
-  "var list = null;
-list = [1, 2, 3];")
+  "(function () {
+var list = null;
+return list = [1, 2, 3];
+})();")
 
 (test-ps-js let-shadows-symbol-macrolet
   (symbol-macrolet ((x y))
     (let ((x 1))
       (+ x x))
     (+ x x))
-  "var x1 = 1;
-x1 + x1;
+  "(function () {
+var x1 = 1;
+return x1 + x1;
+})();
 y + y;")
 
 (test-ps-js let-rename-optimization1
   (let ((x 1))
     (+ x x))
-  "var x = 1;
-x + x;")
+  "(function () {
+var x = 1;
+return x + x;
+})();")
 
 (test-ps-js let-rename-optimization2
   (lambda (x)
     (let ((x (+ 1 x)))
       x))
-  "function (x) {
+  "(function (x) {
     var x1 = 1 + x;
     return x1;
-};")
+});")
 
 (test-ps-js symbol-macro-array
   (symbol-macrolet ((x 1))
@@ -1613,7 +1705,7 @@ x + x;")
 (test-ps-js symbol-macro-obj
   (symbol-macrolet ((x y))
     (create x 1))
-  "{ x : 1 };")
+  "({ x : 1 });")
 
 (test-ps-js symbol-macro-conditional1
   (symbol-macrolet ((x y))
@@ -1632,71 +1724,85 @@ x + x;")
 (test-ps-js flet-apply
   (flet ((foo () 'bar))
     (apply (function foo) nil))
-  "var foo = function () {
+  "(function () {
+var foo = function () {
     return 'bar';
 };
-foo.apply(this, null);")
+return foo.apply(this, null);
+})();")
 
 (test-ps-js let-apply
   (let ((foo (lambda () 1)))
     (let ((foo (lambda () 2)))
       (apply foo nil)))
-  "var foo = function () {
+  "(function () {
+var foo = function () {
     return 1;
 };
 var foo1 = function () {
     return 2;
 };
-foo1.apply(this, null);")
+return foo1.apply(this, null);
+})();")
 
 (test-ps-js flet-let
   (flet ((x (x) (1+ x)))
     (let ((x 2))
       (x x)))
-  "var x = function (x) {
+  "(function () {
+var x = function (x) {
     return x + 1;
 };
 var x1 = 2;
-x(x1);")
+return x(x1);
+})();")
 
 (test-ps-js let-flet
   (let ((x 2))
     (flet ((x (x) (1+ x)))
       (x x)))
-  "var x = 2;
+  "(function () {
+var x = 2;
 var x1 = function (x) {
     return x + 1;
 };
-x1(x);")
+return x1(x);
+})();")
 
 (test-ps-js labels-let
   (labels ((x (x) (1+ x)))
     (let ((x 2))
       (x x)))
-  "var x = function (x) {
+  "(function () {
+var x = function (x) {
     return x + 1;
 };
 var x1 = 2;
-x(x1);")
+return x(x1);
+})();")
 
 (test-ps-js let-labels
   (let ((x 2))
     (labels ((x (x) (1+ x)))
       (x x)))
-  "var x = 2;
+  "(function () {
+var x = 2;
 var x1 = function (x) {
     return x + 1;
 };
-x1(x);")
+return x1(x);
+})();")
 
 (test-ps-js macrolet-let-inteference
   (macrolet ((a (n) `(+ ,n 5)))
     (let ((a (a 1)))
       (let ((b (a (- a 4))))
         (+ a b))))
-  "var a = 1 + 5;
-var b = a - 4 + 5;
-a + b;")
+  "(function () {
+var a = 1 + 5;
+var b = (a - 4) + 5;
+return a + b;
+})();")
 
 (test-ps-js let-subtract-add
   (let ((x 1))
@@ -1705,16 +1811,18 @@ a + b;")
       (- x)
       (decf x)
       (incf x)))
-  "var x = 1;
+  "(function () {
+var x = 1;
 var x1 = 2;
 x1 - x1;
 -x1;
 --x1;
-++x1;")
+return ++x1;
+})();")
 
 (test-ps-js create-reserved-word
   (create :default 1)
-  "{ 'default' : 1 };")
+  "({ 'default' : 1 });")
 
 (test-ps-js getprop-reserved-word
   (getprop foo :default)
@@ -1769,10 +1877,10 @@ x1 - x1;
 
 (test-ps-js nary-comparison1
   (lambda () (< 1 2 3))
-  "function () {
+  "(function () {
     var _cmp1;
     return (_cmp1 = 2, 1 < _cmp1 && _cmp1 < 3);
-};")
+});")
 
 (test-ps-js chain-getprop1
   (chain ($ "foo") (bar x z) frob (baz 5))
@@ -1789,15 +1897,19 @@ x1 - x1;
 (test-ps-js flet-expression
   (1+ (flet ((foo (x) (1+ x)))
         (foo 1)))
-  "(foo = function (x) {
-    return x + 1;
-}, foo(1)) + 1;")
+  "(function () {
+    var foo = function (x) {
+        return x + 1;
+    };
+    return foo(1);
+})() + 1;")
 
 (test-ps-js flet-lambda-list
-  (labels ((foo (x &key (y 0))
-             (+ x y)))
+  (flet ((foo (x &key (y 0))
+           (+ x y)))
     (foo 1 :y 2))
-  "var foo = function (x) {
+  "(function () {
+var foo = function (x) {
     var _js2 = arguments.length;
     for (var n1 = 1; n1 < _js2; n1 += 2) {
         switch (arguments[n1]) {
@@ -1805,10 +1917,11 @@ x1 - x1;
             y = arguments[n1 + 1];
         };
     };
-    var y = undefined === y ? 0 : y;
+    var y = 'undefined' === typeof y ? 0 : y;
     return x + y;
 };
-foo(1, 'y', 2);")
+return foo(1, 'y', 2);
+})();")
 
 (test-ps-js return-case-break-elimination
   (defun foo ()
@@ -1889,7 +2002,8 @@ foo(1, 'y', 2);")
         (doesnt))
     (alert a)
     (alert b))
-  "var prevMv2 = null;
+  "(function () {
+var prevMv2 = null;
 returnsMv();
 prevMv2 = arguments['callee']['mv'];
 try {
@@ -1898,14 +2012,15 @@ try {
     var mv1 = typeof arguments['callee']['mv'] === 'object' ? arguments['callee']['mv'] : new Array(1);
     var b = mv1[0];
     alert(a);
-    alert(b);
+    return alert(b);
 } finally {
-    if (undefined === prevMv2) {
+    if ('undefined' === typeof prevMv2) {
         delete arguments['callee']['mv'];
     } else {
         arguments['callee']['mv'] = prevMv2;
     };
-};")
+};
+})();")
 
 (test-ps-js mv-bind2
   (multiple-value-bind (a b)
@@ -1914,7 +2029,8 @@ try {
         (doesnt b))
     (alert a)
     (alert b))
-  "var prevMv2 = null;
+  "(function () {
+var prevMv2 = null;
 var a = 1;
 returnsMv(a);
 prevMv2 = arguments['callee']['mv'];
@@ -1924,61 +2040,68 @@ try {
     var mv1 = typeof arguments['callee']['mv'] === 'object' ? arguments['callee']['mv'] : new Array(1);
     var b = mv1[0];
     alert(a3);
-    alert(b);
+    return alert(b);
 } finally {
-    if (undefined === prevMv2) {
+    if ('undefined' === typeof prevMv2) {
         delete arguments['callee']['mv'];
     } else {
         arguments['callee']['mv'] = prevMv2;
     };
-};")
+};
+})();")
 
 (test-ps-js multiple-value-bind-simple
   (multiple-value-bind (a b) (blah)
     (+ a b))
-  "var prevMv2 = null;
+  "(function () {
+var prevMv2 = null;
 prevMv2 = arguments['callee']['mv'];
 try {
     arguments['callee']['mv'] = true;
     var a = blah();
     var mv1 = typeof arguments['callee']['mv'] === 'object' ? arguments['callee']['mv'] : new Array(1);
     var b = mv1[0];
-    a + b;
+    return a + b;
 } finally {
-    if (undefined === prevMv2) {
+    if ('undefined' === typeof prevMv2) {
         delete arguments['callee']['mv'];
     } else {
         arguments['callee']['mv'] = prevMv2;
     };
-};")
+};
+})();")
 
 (test-ps-js values0
   (lambda () (values))
-  "function () {
+  "(function () {
     return null;
-};")
+});")
 
 (test-ps-js values1
   (values x)
   "x;")
 
 (test-ps-js values2
-  (values x y)
-  "var val1_1 = x;
+  (lambda () (values x y))
+  "(function () {
+var val1_1 = x;
 var valrest2 = [y];
-if (undefined !== arguments['callee']['caller']['mv']) {
+if ('undefined' !== typeof arguments['callee']['caller']['mv']) {
     arguments['callee']['caller']['mv'] = valrest2;
 };
-val1_1;")
+return val1_1;
+});")
 
 (test-ps-js values3
-  (values x y z)
-  "var val1_1 = x;
-var valrest2 = [y, z];
-if (undefined !== arguments['callee']['caller']['mv']) {
-    arguments['callee']['caller']['mv'] = valrest2;
-};
-val1_1;")
+  (lambda () (values x y z))
+  "(function () {
+    var val1_1 = x;
+    var valrest2 = [y, z];
+    if ('undefined' !== typeof arguments['callee']['caller']['mv']) {
+        arguments['callee']['caller']['mv'] = valrest2;
+    };
+    return val1_1;
+});")
 
 (test-ps-js values-return
   (defun foo ()
@@ -1986,13 +2109,13 @@ val1_1;")
   "function foo() {
     var val1_1 = x;
     var valrest2 = [y];
-    if (undefined !== arguments['callee']['caller']['mv']) {
+    if ('undefined' !== typeof arguments['callee']['caller']['mv']) {
         arguments['callee']['caller']['mv'] = valrest2;
     };
     return val1_1;
 };")
 
-(test-ps-js return-macrolet
+(test-ps-js return-macrolet1
   (defun foo ()
     (return-from foo
       (symbol-macrolet ((x 2))
@@ -2001,7 +2124,6 @@ val1_1;")
     for (; true; ) {
         2 + 2;
     };
-    return null;
 };")
 
 (test-ps-js return-cond
@@ -2025,12 +2147,130 @@ if (foowhat(x)) {
             y = x[_js1];
         };
     };
-    return null;
 } else if (barwhat(x)) {
     return x;
 } else {
     return 3;
 };
+};")
+
+(test-ps-js return-case
+  (defun foo ()
+    (return-from foo
+      (case x
+        (1 (loop for y in x do (foo y)))
+        (2 x)
+        ((t) 3))))
+  "function foo() {
+    switch (x) {
+    case 1:
+        var _js2 = x.length;
+        var _js1 = 0;
+        if (_js1 < _js2) {
+            var y = x[_js1];
+            while (true) {
+                foo(y);
+                _js1 += 1;
+                if (_js1 >= _js2) {
+                    break;
+                };
+                y = x[_js1];
+            };
+            return;
+        } else {
+            return null;
+        };
+    case 2:
+        return x;
+    default:
+        return 3;
+    };
+};")
+
+(test-ps-js return-case1
+  (defun foo ()
+    (return-from foo
+      (case x
+        (1 (if a 1 2))
+        (2 x)
+        ((t) 3))))
+  "function foo() {
+    switch (x) {
+    case 1:
+        return a ? 1 : 2;
+    case 2:
+        return x;
+    default:
+        return 3;
+    };
+};")
+
+(test-ps-js lambda-loop-if-return
+  (lambda ()
+    (if a
+        (loop for y in x do (foo y))
+        c))
+  "(function () {
+    if (a) {
+        var _js4 = x.length;
+        var _js3 = 0;
+        if (_js3 < _js4) {
+            var y = x[_js3];
+            while (true) {
+                foo(y);
+                _js3 += 1;
+                if (_js3 >= _js4) {
+                    break;
+                };
+                y = x[_js3];
+            };
+        };
+    } else {
+        return c;
+    };
+});")
+
+(test-ps-js lambda-loop-if-return1
+  (defun baz ()
+    (foo (lambda ()
+           (if a
+               (progn (loop for y in x do (foo y))
+                      (return-from baz))
+               c))))
+  "function baz() {
+    try {
+        return foo(function () {
+            if (a) {
+                var _js4 = x.length;
+                var _js3 = 0;
+                if (_js3 < _js4) {
+                    var y = x[_js3];
+                    while (true) {
+                        foo(y);
+                        _js3 += 1;
+                        if (_js3 >= _js4) {
+                            break;
+                        };
+                        y = x[_js3];
+                    };
+                };
+                throw { 'ps-block-tag' : 'baz',
+                        'ps-return-value' : null };
+            } else {
+                return c;
+            };
+        });
+    } catch (err) {
+        if (err && 'baz' === err['ps-block-tag']) {
+            if (arguments['callee']['caller'] &&
+                'undefined' !== typeof arguments['callee']['caller']['mv']) {
+                arguments['callee']['caller']['mv'] = err['ps-return-mv-rest'];
+            };
+            return err['ps-return-value'];
+        } else {
+            throw err;
+        };
+    };
 };")
 
 (test-ps-js switch-loop
@@ -2054,26 +2294,28 @@ case 1:
 };")
 
 (test-ps-js setf-places-before-macros
-  (progn
+  (lambda ()
     (defsetf left (el) (offset)
       `(setf (@ ,el style left) ,offset))
     (macrolet ((left (el)
                  `(@ ,el offset-left)))
       (setf (left x) 10)
       (left x)))
-  "var _js2 = x;
+  "(function () {
+var _js2 = x;
 var _js1 = 10;
 _js2.style.left = _js1;
-x.offsetLeft;")
+return x.offsetLeft;
+});")
 
 (test-ps-js for-return
   (lambda () (dolist (arg args) (foo arg)))
-  "function () {
+  "(function () {
     for (var arg = null, _js_idx1 = 0; _js_idx1 < args.length; _js_idx1 += 1) {
         arg = args[_js_idx1];
         foo(arg);
     };
-};")
+});")
 
 (test-ps-js try-catch-return
   (defun foo ()
@@ -2122,16 +2364,16 @@ __setf_foo(5, x, 1, 2, 3, 4);")
 (test-ps-js implicit-return-null
   (lambda ()
     )
-  "function () {
+  "(function () {
     return null;
-};")
+});")
 
 (test-ps-js implicit-return-null
   (lambda ()
     nil)
-  "function () {
+  "(function () {
     return null;
-};")
+});")
 
 (test-ps-js return-conditional-nested
   (defun blep (ss x y)
@@ -2183,7 +2425,6 @@ __setf_foo(5, x, 1, 2, 3, 4);")
 switch (foo) {
 case 123:
     return bar() ? true : null;
-    break;
 case 345:
     return blah();
 };
@@ -2210,7 +2451,7 @@ try {
     (declare (special *foo*))
     (let ((*foo* 1))
       (1+ *foo*)))
-  "function () {
+  "(function () {
     var FOO_TMPSTACK1;
     try {
         FOO_TMPSTACK1 = FOO;
@@ -2219,20 +2460,22 @@ try {
     } finally {
         FOO = FOO_TMPSTACK1;
     };
-};")
+});")
 
 (test-ps-js declare-special-let
   (let ((*foo* 123))
     (declare (special *foo*))
     (blah))
-  "var FOO_TMPSTACK1;
+  "(function () {
+var FOO_TMPSTACK1;
 try {
     FOO_TMPSTACK1 = FOO;
     FOO = 123;
-    blah();
+    return blah();
 } finally {
     FOO = FOO_TMPSTACK1;
-};")
+};
+})();")
 
 (test-ps-js macro-null-toplevel
   (progn
@@ -2247,8 +2490,10 @@ try {
     (let ((test-symbol-macro 2))
       (1+ test-symbol-macro))
     (1+ test-symbol-macro))
-  "var testSymbolMacro1 = 2;
-testSymbolMacro1 + 1;
+  "(function () {
+var testSymbolMacro1 = 2;
+return testSymbolMacro1 + 1;
+})();
 1 + 1;")
 
 (test-ps-js define-symbol-macro-flet
@@ -2258,11 +2503,13 @@ testSymbolMacro1 + 1;
       (foo test-symbol-macro1)
       (test-symbol-macro1))
     (bar test-symbol-macro1))
-  "var testSymbolMacro1_1 = function () {
+  "(function () {
+var testSymbolMacro1_1 = function () {
     return 2;
 };
 foo(1);
-testSymbolMacro1_1();
+return testSymbolMacro1_1();
+})();
 bar(1);")
 
 (test compile-stream-nulls
@@ -2276,11 +2523,13 @@ bar(1);")
 
 (test compile-stream1
   (is (string=
-       "var testSymbolMacro1_1 = function () {
-    return 2;
-};
-foo(1);
-testSymbolMacro1_1();
+       "(function () {
+    var testSymbolMacro1_1 = function () {
+        return 2;
+    };
+    foo(1);
+    return testSymbolMacro1_1();
+})();
 bar(1);
 "
        (with-input-from-string (s "
@@ -2294,11 +2543,13 @@ bar(1);
 (test-ps-js equality-nary1
   (let ((x 10) (y 10) (z 10))
     (= x y z))
-  "var x = 10;
-var y = 10;
-var z = 10;
-var _cmp1 = y;
-x === _cmp1 && _cmp1 === z;")
+  "(function () {
+    var _cmp1;
+    var x = 10;
+    var y = 10;
+    var z = 10;
+    return (_cmp1 = y, x === _cmp1 && _cmp1 === z);
+})();")
 
 (test-ps-js equality1
   (progn
@@ -2332,13 +2583,103 @@ a === b;")
     (when (bar)
       (return-from scope))
     (blee))
-  "scope: {
+  "(function () {
     foo();
     if (bar()) {
-        break scope;
+        return null;
     };
-    blee();
+    return blee();
+})();")
+
+(test-ps-js block-return-from0
+  (defun baz ()
+    (block scope
+     (foo)
+     (when (bar)
+       (return-from scope))
+     (blee)))
+  "function baz() {
+    foo();
+    if (bar()) {
+        return null;
+    };
+    return blee();
 };")
+
+(test-ps-js block-return-from01
+  (defun baz ()
+    (block scope
+     (foo)
+     (when (bar)
+       (return-from scope))
+     (blee))
+    2)
+  "function baz() {
+    scope: {
+        foo();
+        if (bar()) {
+            break scope;
+        };
+        blee();
+    };
+    return 2;
+};")
+
+(test-ps-js block-return-from02
+  (defun baz ()
+    (block scope
+     (foo)
+     (when (bar)
+       (return-from scope (foobar)))
+     (blee))
+    2)
+  "function baz() {
+    scope: {
+        foo();
+        if (bar()) {
+            foobar();
+            break scope;
+        };
+        blee();
+    };
+    return 2;
+};")
+
+(test-ps-js block-return-from1
+  (lambda ()
+    (block scope
+     (foo)
+     (when (bar)
+       (return-from scope))
+     (blee))
+    (+ 1 2))
+  "(function () {
+    scope: {
+        foo();
+        if (bar()) {
+            break scope;
+        };
+        blee();
+    };
+    return 1 + 2;
+});")
+
+(test-ps-js block-return-from2
+  (lambda ()
+    (bar 5)
+    (block scope
+     (foo)
+     (when (bar)
+       (return-from scope 6))
+     (blee)))
+  "(function () {
+    bar(5);
+    foo();
+    if (bar()) {
+        return 6;
+    };
+    return blee();
+});")
 
 (test-ps-js let-funcall
   (let ((x foo))
@@ -2346,11 +2687,13 @@ a === b;")
     (let ((x bar))
       (funcall x))
     (funcall x))
-  "var x = foo;
+  "(function () {
+var x = foo;
 x();
 var x1 = bar;
 x1();
-x();")
+return x();
+})();")
 
 (test-ps-js symbol-macrolet-funcall
   (symbol-macrolet ((foo bar))
@@ -2371,26 +2714,33 @@ x();")
 
 (test-ps-js non-associative
   (+ (/ 1 (/ 2 3)) (- 1 (- 2 3)))
-  "1 / (2 / 3) + 1 - (2 - 3);")
+  "1 / (2 / 3) + (1 - (2 - 3));")
 
 (test-ps-js lambda-apply
   (lambda (x)
     (apply (lambda (y) (bar (1+ y))) x))
-  "function (x) {
+  "(function (x) {
     return (function (y) {
         return bar(y + 1);
     }).apply(this, x);
-};")
+});")
 
 (test-ps-js operator-expressions-nested-let
   (let ((x (let ((y 1))
              y)))
     x)
-  "var x = (y = 1, y); x;")
+  "(function () {
+    var y;
+    var x = (y = 1, y);
+    return x;
+})();")
 
 (test-ps-js operator-expressions-array-nested-let
   (list (let ((y 1)) y) 2)
-  "[(y = 1, y), 2];")
+  "[(function () {
+    var y = 1;
+    return y;
+})(), 2];")
 
 (test-ps-js add-subtract-precedence
   (- x (+ y z))
@@ -2429,14 +2779,15 @@ var foo1 = bar;
 return null;
 };")
 
-(test-ps-js dont-hoist-lexical-dupes
+(test-ps-js rename-lexical-dupes
   (lambda ()
     (list (let ((foo 12)) (* foo 2))
           (let ((foo 13)) (* foo 3))))
-  "function () {
+  "(function () {
     var foo;
-    return [(foo = 12, foo * 2), (foo = 13, foo * 3)];
-};")
+    var foo1;
+    return [(foo = 12, foo * 2), (foo1 = 13, foo1 * 3)];
+});")
 
 (test-ps-js defun-comment1
   (defun foo (x)
@@ -2466,8 +2817,9 @@ var x = 1;")
     case 'bar':
         if (y) {
             return true;
+        } else {
+            return null;
         };
-        break;
     case 'baz':
         return null;
     };
@@ -2483,8 +2835,9 @@ var x = 1;")
     case 'bar':
         if (y) {
             return true;
+        } else {
+            return null;
         };
-        break;
     case 'baz':
         return null;
     };
@@ -2496,10 +2849,10 @@ var x = 1;")
 baz();
 foo = 3;")
 
-;; (test-ps-js var-progn
-;;   (var x (progn (foo) (bar)))
-;;   "foo();
-;; var x = bar();")
+(test-ps-js var-progn
+  (var x (progn (foo) (bar)))
+  "foo();
+var x = bar();")
 
 (test-ps-js implicit-return-loop
   (lambda ()
@@ -2507,7 +2860,7 @@ foo = 3;")
         (progn
           (loop :repeat 100 :do (bar))
           42)))
-  "function () {
+  "(function () {
    if (baz) {
        return 7;
    } else {
@@ -2516,7 +2869,7 @@ foo = 3;")
        };
        return 42;
    };
-};")
+});")
 
 ;; closures in loops need a new binding per loop iteration (idea borrowed from Scheme2JS)
 (test-ps-js loop-closures
@@ -2587,23 +2940,61 @@ foo = 3;")
     (when (= x 1)
       (return))
     (chain console (log x)))
-  "for (var x = null, _js_arrvar2 = [2, 1, 3], _js_idx1 = 0; _js_idx1 < _js_arrvar2.length; _js_idx1 += 1) {
+  "(function () {
+var loopResultVar3 = null;
+for (var x = null, _js_arrvar2 = [2, 1, 3], _js_idx1 = 0;
+     _js_idx1 < _js_arrvar2.length;
+     _js_idx1 += 1) {
     x = _js_arrvar2[_js_idx1];
     if (x === 1) {
+        loopResultVar3 = null;
         break;
     };
     console.log(x);
-};")
+};
+return loopResultVar3;
+})();")
 
 (test-ps-js explicit-nil-block
-  (block nil (return) (+ 1 2))
-  "nilBlock: {
-    break nilBlock;
-    1 + 2;
+  (defun bar ()
+    (foo 1)
+    (block nil (return (foo 2)) (+ 1 2))
+    2)
+  "function bar() {
+    foo(1);
+    nilBlock: {
+        foo(2);
+        break nilBlock;
+        1 + 2;
+    };
+    return 2;
 };")
 
 (test-ps-js dynamic-extent-function-return
-  (defun foo ()  ((lambda () (return-from foo))))
+  (defun foo ()
+    ((lambda ()
+       (return-from foo 6))))
+  "function foo() {
+    try {
+        return (function () {
+            throw { 'ps-block-tag' : 'foo', 'ps-return-value' : 6 };
+        })();
+    } catch (err) {
+        if (err && 'foo' === err['ps-block-tag']) {
+            if (arguments['callee']['caller'] && 'undefined' !== typeof arguments['callee']['caller']['mv']) {
+                arguments['callee']['caller']['mv'] = err['ps-return-mv-rest'];
+            };
+            return err['ps-return-value'];
+        } else {
+            throw err;
+        };
+    };
+};")
+
+(test-ps-js dynamic-extent-function-return-nothing
+  (defun foo ()
+    ((lambda ()
+       (return-from foo))))
   "function foo() {
     try {
         return (function () {
@@ -2611,7 +3002,52 @@ foo = 3;")
         })();
     } catch (err) {
         if (err && 'foo' === err['ps-block-tag']) {
-            err['ps-return-value'];
+            if (arguments['callee']['caller'] && 'undefined' !== typeof arguments['callee']['caller']['mv']) {
+                arguments['callee']['caller']['mv'] = err['ps-return-mv-rest'];
+            };
+            return err['ps-return-value'];
+        } else {
+            throw err;
+        };
+    };
+};")
+
+(test-ps-js dynamic-extent-function-return-values
+  (defun foo ()
+    ((lambda ()
+       (return-from foo (values 1 2 3)))))
+  "function foo() {
+    try {
+        return (function () {
+            throw { 'ps-block-tag' : 'foo', 'ps-return-value' : 1, 'ps-return-mv-rest' : [2, 3] };
+        })();
+    } catch (err) {
+        if (err && 'foo' === err['ps-block-tag']) {
+            if (arguments['callee']['caller'] && 'undefined' !== typeof arguments['callee']['caller']['mv']) {
+                arguments['callee']['caller']['mv'] = err['ps-return-mv-rest'];
+            };
+            return err['ps-return-value'];
+        } else {
+            throw err;
+        };
+    };
+};")
+
+(test-ps-js dynamic-extent-function-return-funcall
+  (defun foo ()
+    ((lambda ()
+       (return-from foo (if baz 6 5)))))
+  "function foo() {
+    try {
+        return (function () {
+            throw { 'ps-block-tag' : 'foo', 'ps-return-value' : baz ? 6 : 5 };
+        })();
+    } catch (err) {
+        if (err && 'foo' === err['ps-block-tag']) {
+            if (arguments['callee']['caller'] && 'undefined' !== typeof arguments['callee']['caller']['mv']) {
+                arguments['callee']['caller']['mv'] = err['ps-return-mv-rest'];
+            };
+            return err['ps-return-value'];
         } else {
             throw err;
         };
@@ -2619,21 +3055,43 @@ foo = 3;")
 };")
 
 (test-ps-js block-dynamic-return
-  (block nil ((lambda () (return))) (+ 1 2))
-  "nilBlock: {
+  (var foo ((lambda ()
+              (block nil
+                ((lambda () (return 6)))
+                (+ 1 2)))))
+  "var foo = (function () {
     try {
         (function () {
-            throw { 'ps-block-tag' : 'nilBlock', 'ps-return-value' : null };
+            throw { 'ps-block-tag' : 'nilBlock', 'ps-return-value' : 6 };
         })();
-        1 + 2;
+        return 1 + 2;
     } catch (err) {
         if (err && 'nilBlock' === err['ps-block-tag']) {
-            err['ps-return-value'];
+            if (arguments['callee']['caller'] && 'undefined' !== typeof arguments['callee']['caller']['mv']) {
+                arguments['callee']['caller']['mv'] = err['ps-return-mv-rest'];
+            };
+            return err['ps-return-value'];
         } else {
             throw err;
         };
     };
-};")
+})();")
+
+(test-ps-js block-dynamic-return1
+  (var foo ((lambda ()
+              (block nil
+                ((lambda () (return 6)))
+                (+ 1 2))
+              (foobar 1 2))))
+  "var foo = (function () {
+    nilBlock: {
+        (function () {
+            break nilBlock;
+        })();
+        1 + 2;
+    };
+    return foobar(1, 2);
+})();")
 
 (test-ps-js iteration-lambda-capture-no-need
   (dolist (x y) (lambda (x) (1+ x))) ;; there's really no need to create a 'with' scope in this case
@@ -2671,12 +3129,12 @@ foo = 3;")
       (when x
         (return 1))
       2))
-  "function (x) {
+  "(function (x) {
     if (x) {
         return 1;
     };
     return 2;
-};")
+});")
 
 (test-ps-js lambda-nil-return-implicit-nested
   (lambda (x)
@@ -2686,16 +3144,38 @@ foo = 3;")
         (dotimes (i 4)
           (return 1)))
       2))
-  "function (x) {
+  "(function (x) {
+    if (x) {
+        return 1;
+    } else {
+        var loopResultVar1 = null;
+        for (var i = 0; i < 4; i += 1) {
+            loopResultVar1 = 1;
+            break;
+        };
+        loopResultVar1;
+    };
+    return 2;
+});")
+
+(test-ps-js lambda-nil-return-implicit-nested2
+  (lambda (x)
+    (block foo
+      (if x
+        (return-from foo 1)
+        (dotimes (i 4)
+          (return-from foo i)))
+      2))
+  "(function (x) {
     if (x) {
         return 1;
     } else {
         for (var i = 0; i < 4; i += 1) {
-            break;
+            return i;
         };
     };
     return 2;
-};")
+});")
 
 (test-ps-js throw-is-a-statement
   (defun blah ()
@@ -2733,8 +3213,9 @@ foo = 3;")
     case 'a':
         if (foo()) {
             return 111;
+        } else {
+            return null;
         };
-        break;
     case 'b':
         return true;
     };
@@ -2756,29 +3237,37 @@ foo = 3;")
   (flet ((foo ()
            (return-from foo 123)))
     (foo))
-  "var foo = function () {
+  "(function () {
+var foo = function () {
         return 123;
     };
-    foo();")
+    return foo();
+})();")
 
 (test-ps-js lambda-docstring-declarations
   (lambda (x)
     "This is a docstring"
     (declare (ignore x))
     2)
-  "function (x) {
+  "(function (x) {
     return 2;
-};")
+});")
 
 (test-ps-js setf-let-exp
   (setf foo (let ((x (+ 1 2)))
               (if x 123 456)))
-  "foo = (x = 1 + 2, x ? 123 : 456);")
+  "foo = (function () {
+    var x = 1 + 2;
+    return x ? 123 : 456;
+})();")
 
 (test-ps-js create-let-exp
   (create :abc (let ((x (+ 1 2)))
                  (if x 123 456)))
-  "{ 'abc' : (x = 1 + 2, x ? 123 : 456) };")
+  "({ 'abc' : (function () {
+    var x = 1 + 2;
+    return x ? 123 : 456;
+})() });")
 
 (test-ps-js eql-eql-eql-precedence
   (unless (equal (= 3 3) (= 3 4))
@@ -2790,10 +3279,11 @@ foo = 3;")
 (test-ps-js case-cond-breaks
   (defun blah (x)
     (case x
-      (123 (cond ((foo1) (when (foo2)
-                           (when (foo3)
-                             (return-from blah nil))
-                           t))))
+      (123 (cond ((foo1)
+                  (when (foo2)
+                    (when (foo3)
+                      (return-from blah nil))
+                    t))))
       (456 (foo7))))
   "function blah(x) {
     switch (x) {
@@ -2804,48 +3294,70 @@ foo = 3;")
                     return null;
                 };
                 return true;
+            } else {
+                return null;
             };
+        } else {
+            return null;
         };
-        break;
     case 456:
         return foo7();
     };
 };")
 
+(test-ps-js cond-double-t
+  (lambda ()
+    (cond (foo 1)
+          (t 2)
+          (t 3)))
+  "(function () {
+    if (foo) {
+        return 1;
+    } else {
+        return 2;
+    };
+});")
+
 (test-ps-js let-let-funcall-lambda
   (let ((x 5))
     (let ((x 7))
       (funcall (lambda (x) (+ x 9)) x)))
-  "var x = 5;
-var x1 = 7;
-(function (x) {
-    return x + 9;
-})(x1);")
+  "(function () {
+    var x = 5;
+    var x1 = 7;
+    return (function (x) {
+        return x + 9;
+    })(x1);
+})();")
 
 (test-ps-js let-let-lambda
   (let ((x 5))
     (let ((x 7))
       (lambda (x) (+ x 9))))
-  "var x = 5;
+  "(function () {
+var x = 5;
 var x1 = 7;
-function (x) {
+return function (x) {
     return x + 9;
-};")
+};
+})();")
 
 (test-ps-js let-lambda
   (let ((x 5))
     (lambda (x) (+ x 9)))
-  "var x = 5;
-function (x) {
+  "(function () {
+var x = 5;
+return function (x) {
     return x + 9;
-};")
+};
+})();")
 
 (test-ps-js symbol-macrolet-no-shadow-lambda
   (symbol-macrolet ((x y))
     (lambda (x) (+ x x)))
-  "function (x) {
+  "(function (x) {
     return x + x;
-};")
+});")
 
 (test-ps-js divide-one-arg-reciprocal
   (/ 2)
@@ -2868,8 +3380,230 @@ function (x) {
     (let ((x 1))
       (foo x))
     (incf x))
-  "function (x) {
+  "(function (x) {
     var x1 = 1;
     foo(x1);
     return ++x;
+});")
+
+(test-ps-js times-rem
+  (* x (rem y z))
+  "x * (y % z);")
+
+(test-ps-js rem-divide
+  (/ x (rem y z))
+  "x / (y % z);")
+
+(test-ps-js case-break-return
+  (lambda () (case x (:foo) (:bar 1)))
+  "(function () {
+    switch (x) {
+    case 'foo':
+        return null;
+    case 'bar':
+        return 1;
+    };
+});")
+
+(test-ps-js trivial-expression-switch
+  (foobar (case x (1 2)))
+  "foobar((function () {
+    switch (x) {
+    case 1:
+        return 2;
+    };
+})());")
+
+(test-ps-js trivial-expression-while
+  (foobar (while (< 0 x) (decf x)))
+  "foobar((function () {
+    while (0 < x) {
+        --x;
+    };
+})());")
+
+(test-ps-js funcall-block-expression-loop-lambda
+  (foobar (loop for i from 0 to 10 do (1+ i)))
+  "foobar((function () {
+    for (var i = 0; i <= 10; i += 1) {
+        i + 1;
+    };
+})());")
+
+(test-ps-js plus-block-expression-loop-lambda
+  (1+ (loop for i from 0 to 10 do (1+ i)))
+  "(function () {
+    for (var i = 0; i <= 10; i += 1) {
+        i + 1;
+    };
+})() + 1;")
+
+(test-ps-js let-closures-rename
+  (lambda ()
+    (let ((x 1)) (lambda () (1+ x)))
+    (let ((x 2)) (lambda () (1+ x))))
+  "(function () {
+    var x = 1;
+    function () {
+        return x + 1;
+    };
+    var x1 = 2;
+    return function () {
+        return x1 + 1;
+    };
+});")
+
+(test-ps-js let-closures-rename1
+  (lambda ()
+    (let ((x 1))
+      (let ((y 2))
+        (lambda () (+ x y))))
+    (let ((x 2))
+      (let ((y 3))
+        (lambda () (+ x y)))))
+  "(function () {
+    var x = 1;
+    var y = 2;
+    function () {
+        return x + y;
+    };
+    var x1 = 2;
+    var y2 = 3;
+    return function () {
+        return x1 + y2;
+    };
+});")
+
+(test-ps-js let-closures-rename2
+  (defun make-closures ()
+    (list
+     (let ((x 1)) (lambda () (1+ x)))
+     (let ((x 2)) (lambda () (1+ x)))))
+  "function makeClosures() {
+    var x;
+    var x1;
+    return [(x = 1, function () {
+        return x + 1;
+    }), (x1 = 2, function () {
+        return x1 + 1;
+    })];
+
 };")
+
+(test-ps-js conditional-not-used-up
+  (lambda (bar)
+    (when bar
+      (let ((x 1))
+        (1+ x))))
+  "(function (bar) {
+    if (bar) {
+        var x = 1;
+        return x + 1;
+    };
+});")
+
+(test-ps-js toplevel-local-scope
+  (create "fn" (let ((x 5)) (lambda () x)))
+  "({ 'fn' : (function () {
+    var x = 5;
+    return function () {
+        return x;
+    };
+})() });")
+
+(test-ps-js toplevel-local-scope1
+  (defvar foo (create "fn" (let ((x 5)) (lambda () x))))
+  "var foo = { 'fn' : (function () {
+    var x = 5;
+    return function () {
+        return x;
+    };
+})() };")
+
+(test-ps-js block-let
+  (block foobar
+    (let ((x 1))
+      (return-from foobar x)
+      2))
+  "(function () {
+    var x = 1;
+    return x;
+    return 2;
+})();")
+
+(test-ps-js dolist-return1
+  (dolist (x '(5 2 3))
+    (return (1+ x)))
+  "(function () {
+var loopResultVar3 = null;
+for (var x = null, _js_arrvar2 = [5, 2, 3], _js_idx1 = 0; _js_idx1 < _js_arrvar2.length; _js_idx1 += 1) {
+    x = _js_arrvar2[_js_idx1];
+    loopResultVar3 = x + 1;
+    break;
+};
+return loopResultVar3;
+})();")
+
+(test-ps-js expressionize-if-macroexpand-error
+  (progn (defmacro xbaz () `(blah))
+
+         (defun foo (xbaz)
+           (unless (blah)
+             (cond (xbaz (blah))
+                   (t (blahblah))))))
+  "function foo(xbaz) {
+    if (!blah()) {
+        if (xbaz) {
+            return blah();
+        } else {
+            return blahblah();
+        };
+    };
+};")
+
+(test-ps-js toplevel-defun-macroexpand
+  (progn (defmacro defun-js (name lambda-list &body body)
+           `(defun ,name ,lambda-list ,@body))
+
+         (let ((foo 0))
+           (defun-js bar () (1+ foo))
+           (defvar baz 2)))
+  "var foo = 0;
+function bar() {
+    return foo + 1;
+};
+var baz = 2;")
+
+;;; broken
+
+;; (test-ps-js let-defun-toplevel
+;;   (progn (let ((foo 0))
+;;            (defun bar () foo))
+;;          (bar))
+;;   "var bar_foo1 = 0;
+;; function bar() {
+;;     return bar_foo1;
+;; };
+;; bar();")
+
+;; (test-ps-js let-defvar-toplevel
+;;   (progn (let ((foo 0))
+;;            (defvar bar (1+ foo)))
+;;          bar)
+;;   "var bar_foo1 = 0;
+;; var bar = bar_foo1 + 1;
+;; bar;")
+
+;; (test-ps-js setf-side-effects
+;;   (progn
+;;     (let ((x 10))
+;;       (defun side-effect()
+;;         (setf x 4)
+;;         3)
+;;       (setf x (+ 2 (side-effect) x 5))))
+;;   "var sideEffect_x1 = 10;
+;; function sideEffect() {
+;;     sideEffect_x1 = 4;
+;;     return 3;
+;; };
+;; sideEffect_x1 = 2 + sideEffect() + x + 5;")
