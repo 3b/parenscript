@@ -43,8 +43,19 @@
   (defined-operator-override-check name
       `(setf (gethash ',name ,type)
              (lambda (&rest whole)
-               (destructuring-bind ,lambda-list whole
-                 ,@body)))))
+               (let ((e (destructuring-bind ,lambda-list (cdr whole)
+                          ,@body)))
+                 #++(format t "expand ~s -> ~s, ~s~%"
+                         whole e (boundp 'line-number-stream::*read-position-map*))
+                 #++(when (and (boundp 'line-number-stream::*read-position-map*)
+                            (gethash whole line-number-stream::*read-position-map*))
+                   (format t " @ ~s~%"
+                           (gethash whole line-number-stream::*read-position-map* :missing))
+                   (setf (gethash e line-number-stream::*read-position-map*)
+                         (gethash whole line-number-stream::*read-position-map*))
+                   )
+                 e
+                 )))))
 
 (defmacro define-expression-operator (name lambda-list &body body)
   `(%define-special-operator *special-expression-operators*
@@ -242,9 +253,9 @@ form, FORM, returns the new value for *compilation-level*."
          (statement-impl (gethash op *special-statement-operators*))
          (expression-impl (gethash op *special-expression-operators*)))
     (cond ((not compile-expression?)
-           (apply (or statement-impl expression-impl) (cdr form)))
+           (apply (or statement-impl expression-impl) form))
           (expression-impl
-           (apply expression-impl (cdr form)))
+           (apply expression-impl form))
           ((member op *lambda-wrappable-statements*)
            (compile-expression `((lambda () ,form))))
           (t (error 'compile-expression-error :form form)))))
@@ -263,16 +274,26 @@ form, FORM, returns the new value for *compilation-level*."
       (symbol
        (try-expanding form form))
       (cons
-       (try-expanding form
-         (let ((*compilation-level*
-                (adjust-compilation-level form *compilation-level*)))
-           (if (special-form? form)
-               (compile-special-form form)
-               `(ps-js:funcall
-                 ,(if (symbolp (car form))
-                      (maybe-rename-local-function (car form))
-                      (compile-expression (car form)))
-                 ,@(mapcar #'compile-expression (cdr form))))))))))
+       (let ((e (try-expanding form
+                       (let ((*compilation-level*
+                               (adjust-compilation-level form *compilation-level*)))
+                         (if (special-form? form)
+                             (compile-special-form form)
+                             `(ps-js:funcall
+                               ,(if (symbolp (car form))
+                                    (maybe-rename-local-function (car form))
+                                    (compile-expression (car form)))
+                               ,@(mapcar #'compile-expression (cdr form))))))))
+         (format t "compile ~s -> ~s, ~s~%"
+                         form e (boundp 'line-number-stream::*read-position-map*))
+         (when (and (boundp 'line-number-stream::*read-position-map*)
+                    (gethash form line-number-stream::*read-position-map*))
+           (format t " @ ~s~%"
+                   (gethash form line-number-stream::*read-position-map* :missing))
+           (setf (gethash e line-number-stream::*read-position-map*)
+                 (gethash form line-number-stream::*read-position-map*)))
+         e)
+       ))))
 
 (defun compile-statement (form)
   (let ((compile-expression? nil))

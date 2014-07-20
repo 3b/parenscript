@@ -96,7 +96,26 @@ vice-versa.")
       (psw (symbol-to-js-string s))))
 
 (defmethod ps-print ((compiled-form cons))
-  (ps-print% (car compiled-form) (cdr compiled-form)))
+  (when (boundp 'line-number-stream::*read-position-map*)
+    (let ((ln (gethash compiled-form
+                       line-number-stream::*read-position-map*)))
+      (format *debug-io* "=====  ~s ~s~%" ln compiled-form)
+      (when (and ln
+                 *sourcemap*
+                 (typep *psw-stream*
+                        'line-number-stream::line-number-output-mixin))
+        (3b-sourcemap::add-segment
+         *sourcemap*
+         (line-number-stream::output-line-number *psw-stream*)
+         (line-number-stream::output-column-number *psw-stream*)
+         *sourcemap-file*
+         (first ln)
+         (second ln)))))
+  (progn #+let ((*psw-stream* (if (typep *psw-stream* 'broadcast-stream)
+                          *psw-stream*
+                          (make-broadcast-stream *psw-stream* *debug-io*))))
+    (ps-print% (car compiled-form) (cdr compiled-form)))
+  )
 
 (defun newline-and-indent (&optional indent-spaces)
   (if *ps-print-pretty*

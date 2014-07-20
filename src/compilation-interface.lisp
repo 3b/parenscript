@@ -67,27 +67,41 @@ string."
                     (parenscript-print (compile-statement form) nil))))
 
 (defvar *ps-read-function* #'read)
+(defparameter *sourcemap* nil)
+(defparameter *sourcemap-file* nil)
 
 (defun ps-compile-stream (stream)
   "Reads (using the value of *ps-read-function*, #'read by default, as
 the read function) Parenscript forms from stream and compiles them as
 if by ps*. If *parenscript-stream* is bound, writes the output to
 *parenscript-stream*, otherwise and returns a string."
-  (let ((output-stream (or *parenscript-stream* (make-string-output-stream))))
+  (let ((output-stream (or *parenscript-stream* (make-string-output-stream)))
+        (*sourcemap* (or *sourcemap*
+                         (make-instance '3b-sourcemap::sourcemap))))
     (let ((*compilation-level* :toplevel)
           (*readtable* *readtable*)
           (*package* *package*)
           (*parenscript-stream* output-stream)
           (eof '#:eof))
-      (loop for form = (funcall *ps-read-function* stream nil eof)
-            until (eq form eof) do (ps* form) (fresh-line *parenscript-stream*)))
-    (unless *parenscript-stream*
-      (get-output-stream-string output-stream))))
+      (line-number-stream::with-input-line-numbers (ln-stream stream)
+        (line-number-stream::with-output-line-numbers (*parenscript-stream* *parenscript-stream*)
+         (loop for form = (funcall *ps-read-function* ln-stream nil eof)
+               until (eq form eof) do (ps* form) (fresh-line *parenscript-stream*)))))
+    (values
+     (unless *parenscript-stream*
+       (get-output-stream-string output-stream))
+     *sourcemap*)))
 
-(defun ps-compile-file (source-file &key (element-type 'character) (external-format :default))
+(defun ps-compile-file (source-file &key (element-type 'character) (external-format :default) (sourcemap-source-file source-file))
   "Opens file as input stream and calls ps-compile-stream on it."
-  (with-open-file (stream source-file
-                          :direction :input
-                          :element-type element-type
-                          :external-format external-format)
-    (ps-compile-stream stream)))
+  (let ((*sourcemap-file* sourcemap-source-file))
+    (with-open-file (stream source-file
+                            :direction :input
+                            :element-type element-type
+                            :external-format external-format)
+      (multiple-value-bind (output sourcemap)
+          (ps-compile-stream stream)
+        (values output
+                (with-output-to-string (ss)
+                  (3b-sourcemap::write-source-map-to-stream sourcemap ss
+                                                            :anti-xssi nil)))))))
